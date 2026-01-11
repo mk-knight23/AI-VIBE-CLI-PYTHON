@@ -1,79 +1,78 @@
-# Friday
+# Friday AI Agent
 
-An AI agent that can execute tasks using tools and manage conversations.
+Friday is a powerful AI assistant designed to help you with coding tasks, file management, and information retrieval directly from your terminal.
 
-## Features
+## Getting Started
 
-### Core Functionality
+### 1. Prerequisites
+- Python 3.10 or higher
+- An API Key (e.g., from MiniMax or OpenRouter)
 
-- Interactive and single-run modes
-- Streaming text responses
-- Multi-turn conversations with tool calling
-- Configurable model settings and temperature
+### 2. Installation
+Clone the repository and install the dependencies:
+```bash
+git clone https://github.com/mk-knight23/Friday.git
+cd Friday
+pip install -r requirements.txt
+```
 
-### Built-in Tools
+### 3. Setup Global Command
+To run `friday` from any directory, you can create a symbolic link (replace `/path/to/Friday` with your actual path):
+```bash
+chmod +x /path/to/Friday/friday
+sudo ln -s /path/to/Friday/friday /usr/local/bin/friday
+```
 
-- File operations: read, write, edit files
-- Directory operations: list directories, search with glob patterns
-- Text search: grep for pattern matching
-- Shell execution: run shell commands
-- Web access: search and fetch web content
-- Memory: store and retrieve information
-- Todo: manage task lists
+### 4. Configuration
+Friday uses environment variables for configuration. The easiest way is to use a `.env` file:
+```bash
+cp .env.example .env
+```
+Open `.env` and add your API key:
+```env
+API_KEY=your_sk_...
+BASE_URL=https://api.minimax.io/v1
+```
 
-### Context Management
+## Usage
 
-- Automatic context compression when approaching token limits
-- Tool output pruning to manage context size
-- Token usage tracking
+### Interactive Mode
+Launch the interactive shell by simply typing:
+```bash
+friday
+```
 
-### Safety and Approval
+### Single Prompt
+Run a specific task without entering interactive mode:
+```bash
+friday "Scan the current directory for security risks"
+```
 
-- Multiple approval policies: on-request, auto, never, yolo
-- Dangerous command detection and blocking
-- Path-based safety checks
-- User confirmation prompts for mutating operations
+### Options
+- `-c, --cwd DIRECTORY`: Set the working directory for the agent.
+- `--help`: Show available options.
 
-### Session Management
+## Built-in Tools
+Friday comes equipped with a suite of tools:
+- **File System**: `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`
+- **Search**: `grep` for pattern matching
+- **Shell**: `shell` to execute system commands safely
+- **Web**: `web_search` and `web_fetch`
+- **Memory**: `memory` to store and retrieve context
+- **Tasks**: `todos` to manage work lists
 
-- Save and resume sessions
-- Create checkpoints
-- Persistent session storage
+## Security Features
+- **Secret Scrubbing**: Friday automatically masks sensitive information (API keys, passwords) in tool outputs based on configurable patterns.
+- **Approval Policies**: You can configure how the agent asks for permission before executing dangerous commands (`/approval`).
+- **Path Validation**: Operations are restricted to allowed directories to protect your system.
 
-### MCP Integration
+## Testing
+Run the comprehensive test suite to ensure everything is working correctly:
+```bash
+python3 tests/test_all_tools.py
+python3 tests/test_real_world.py
+python3 tests/test_security.py
+```
 
-- Connect to Model Context Protocol servers
-- Use tools from MCP servers
-- Support for stdio and HTTP/SSE transports
-
-### Subagents
-
-- Specialized subagents for specific tasks
-- Built-in subagents: codebase investigator, code reviewer
-- Configurable subagent definitions with custom tools and limits
-
-### Loop Detection
-
-- Detects repeating actions
-- Prevents infinite loops in agent execution
-
-### Hooks System
-
-- Execute scripts before/after agent runs
-- Execute scripts before/after tool calls
-- Error handling hooks
-- Custom commands and scripts
-
-### Configuration
-
-- Configurable working directory
-- Tool allowlisting
-- Developer and user instructions
-- Shell environment policies
-- MCP server configuration
-
-### User Interface
-
-- Terminal UI with formatted output
-- Command interface: /help, /config, /tools, /mcp, /stats, /save, /resume, /checkpoint, /restore
-- Real-time tool call visualization
+## License
+MIT
