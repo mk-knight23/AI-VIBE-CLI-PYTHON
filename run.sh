@@ -1,8 +1,9 @@
 #!/bin/bash
 
-# MiniMax API Configuration
-export API_KEY="***REMOVED***"
-export BASE_URL="https://api.minimax.io/v1"
+# Load environment variables if .env exists
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs)
+fi
 
 # Run the AI Agent
 python3 main.py "$@"

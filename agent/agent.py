@@ -175,7 +175,9 @@ class Agent:
         exc_val,
         exc_tb,
     ) -> None:
-        if self.session and self.session.client and self.session.mcp_manager:
-            await self.session.client.close()
-            await self.session.mcp_manager.shutdown()
+        if self.session:
+            if self.session.client:
+                await self.session.client.close()
+            if self.session.mcp_manager:
+                await self.session.mcp_manager.shutdown()
             self.session = None

@@ -77,3 +77,27 @@ def _truncate_by_chars(text: str, target_tokens: int, suffix: str, model: str) -
             high = mid - 1
 
     return text[:low] + suffix
+
+
+def scrub_secrets(text: str, patterns: list[str]) -> str:
+    """Mask sensitive information in text based on patterns"""
+    import fnmatch
+    import re
+
+    if not patterns:
+        return text
+
+    scrubbed = text
+    for pattern in patterns:
+        # Simple glob-to-regex conversion for basic patterns like *KEY*
+        regex_pattern = fnmatch.translate(pattern)
+        # fnmatch.translate adds \Z to the end, which we don't want for searching within text
+        if regex_pattern.endswith("\\Z"):
+            regex_pattern = regex_pattern[:-2]
+        
+        try:
+            scrubbed = re.sub(regex_pattern, "[REDACTED]", scrubbed, flags=re.IGNORECASE)
+        except re.error:
+            continue
+
+    return scrubbed

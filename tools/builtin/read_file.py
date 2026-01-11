@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 
 from tools.base import Tool, ToolInvocation, ToolKind, ToolResult
 from utils.paths import is_binary_file, resolve_path
-from utils.text import count_tokens, truncate_text
+from utils.text import count_tokens, truncate_text, scrub_secrets
 
 
 class ReadFileParams(BaseModel):
@@ -98,6 +98,11 @@ class ReadFileTool(Tool):
                 formatted_lines.append(f"{i:6}|{line}")
 
             output = "\n".join(formatted_lines)
+            
+            # Scrub secrets if patterns are defined
+            if self.config.shell_environment and self.config.shell_environment.exclude_patterns:
+                output = scrub_secrets(output, self.config.shell_environment.exclude_patterns)
+
             token_count = count_tokens(output)
 
             truncated = False

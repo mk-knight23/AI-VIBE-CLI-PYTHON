@@ -5,6 +5,7 @@ from tools.base import Tool, ToolInvocation, ToolKind, ToolResult
 from pydantic import BaseModel, Field
 
 from utils.paths import is_binary_file, resolve_path
+from utils.text import scrub_secrets
 
 
 class GrepParams(BaseModel):
@@ -85,8 +86,17 @@ class GrepTool(Tool):
                 },
             )
 
+        output = "\n".join(output_lines)
+
+        # Scrub secrets if patterns are defined
+        if (
+            self.config.shell_environment
+            and self.config.shell_environment.exclude_patterns
+        ):
+            output = scrub_secrets(output, self.config.shell_environment.exclude_patterns)
+
         return ToolResult.success_result(
-            "\n".join(output_lines),
+            output,
             metadata={
                 "path": str(search_path),
                 "matches": matches,
