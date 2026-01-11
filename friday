@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# Friday AI Agent Launcher
+# MiniMax API Configuration
+export API_KEY="***REMOVED***"
+export BASE_URL="https://api.minimax.io/v1"
+
+# Run the Friday AI Agent
+python3 /Users/mkazi/Downloads/ai-coding-agent-main/main.py "$@"
