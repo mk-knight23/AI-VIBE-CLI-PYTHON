@@ -1,0 +1,1 @@
+# Friday AI Hooks module

@@ -1,0 +1,1 @@
+# Friday AI Prompts module
