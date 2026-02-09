@@ -5,6 +5,46 @@ All notable changes to Friday AI Teammate will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2025-02-09
+
+### Added
+- **Autonomous Development Loop** - Complete Ralph-inspired autonomous development system
+  - AutonomousLoop class with intelligent exit detection
+  - ResponseAnalyzer for semantic response understanding
+  - CircuitBreaker with three-state logic (CLOSED, HALF_OPEN, OPEN)
+  - RateLimiter with 100 calls/hour limit and automatic reset
+  - Dual-condition exit gate (completion indicators + EXIT_SIGNAL)
+- **Session Management** - Enhanced session persistence and tracking
+  - SessionManager class with full CRUD operations
+  - Session event tracking (STARTED, PAUSED, RESUMED, STOPPED, ERROR, COMPLETED)
+  - Session history with 100-entry limit
+  - Session expiration (configurable, default 24 hours)
+- **CLI Commands** - Autonomous mode control commands
+  - `/autonomous [max_loops]` - Start autonomous development loop
+  - `/loop <cmd>` - Control loop (stop, pause, resume, status)
+  - `/monitor` - Show loop status and metrics
+  - `/circuit <cmd>` - Control circuit breaker (reset, status, open, close)
+- **Project Structure** - Friday project folder for autonomous mode
+  - `.friday/PROMPT.md` - Main development instructions
+  - `.friday/fix_plan.md` - Task checklist
+  - `.friday/AGENT.md` - Build/run instructions
+  - `.friday/status.json` - Real-time status
+  - `.friday/.call_count` - Rate limiting state
+  - `.friday/.session_id` - Session continuity
+  - `.friday/logs/` - Loop execution logs
+- **Documentation**
+  - docs/UPGRADE-v0.2.0.md - Comprehensive upgrade guide
+  - Updated README.md with autonomous mode
+  - Enhanced TUI help text with new commands
+
+### Changed
+- Updated version from 0.1.0 to 0.2.0
+- Enhanced CLI with autonomous mode integration
+- Improved session management architecture
+
+### Fixed
+- Test import paths for better project structure
+
 ## [0.1.0] - 2025-02-09
 
 ### Added

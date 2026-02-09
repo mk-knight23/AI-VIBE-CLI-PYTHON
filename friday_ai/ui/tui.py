@@ -615,6 +615,12 @@ class TUI:
 - `/approval <mode>` - Change approval mode (yolo, auto, auto-edit, on-request, on-failure, never)
 - `/stats` - Show session statistics
 
+### Autonomous Mode
+- `/autonomous [max_loops]` - Start autonomous development loop
+- `/loop <cmd>` - Control loop (stop, pause, resume, status)
+- `/monitor` - Show loop status and metrics
+- `/circuit <cmd>` - Control circuit breaker (reset, status, open, close)
+
 ### Tools & Workflows
 - `/tools` - List available tools
 - `/mcp` - Show MCP server status
@@ -659,6 +665,7 @@ class TUI:
 - Just type your message to chat with the agent
 - The agent can read, write, edit files and execute commands
 - Use `/workflow code-review` for guided code reviews
+- Use `/autonomous` for continuous autonomous development
 - Some operations require approval (can be configured with `/approval`)
 - Create checkpoints before major changes: `/checkpoint`
 """

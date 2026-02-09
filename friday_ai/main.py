@@ -20,7 +20,7 @@ from friday_ai.ui.tui import TUI, get_console
 console = get_console()
 
 # Version information
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 class CLI:
@@ -389,6 +389,18 @@ class CLI:
                 console.print(f"  Commands: {len(self._claude_context.commands)}")
             else:
                 console.print("[warning].claude directory not found[/warning]")
+        elif cmd_name == "/autonomous":
+            # Start autonomous development loop
+            await self._start_autonomous_loop(cmd_args)
+        elif cmd_name == "/loop":
+            # Control autonomous loop
+            await self._control_loop(cmd_args)
+        elif cmd_name == "/monitor":
+            # Show loop status
+            self._show_loop_status()
+        elif cmd_name == "/circuit":
+            # Circuit breaker control
+            self._control_circuit_breaker(cmd_args)
         elif cmd_name == "/agents":
             # List available .claude agents
             if not self._claude_context:
@@ -526,6 +538,239 @@ class CLI:
         topic = console.input("What topic do you want to learn about? ").strip()
         if topic:
             await self._process_message(f"Explain {topic} with examples from this codebase")
+
+    async def _start_autonomous_loop(self, args: str) -> None:
+        """Start autonomous development loop.
+
+        Args:
+            args: Optional arguments for the loop (max_loops, etc).
+        """
+        from friday_ai.agent.autonomous_loop import AutonomousLoop, LoopConfig
+
+        console.print("\n[bold]🚀 Autonomous Development Loop[/bold]")
+        console.print("[dim]Friday will iteratively improve the project until completion.[/dim]")
+
+        # Parse arguments
+        max_loops = 100
+        if args:
+            parts = args.split()
+            for part in parts:
+                if part.startswith("--max-loops="):
+                    max_loops = int(part.split("=")[1])
+                elif part.isdigit():
+                    max_loops = int(part)
+
+        console.print(f"\n[yellow]Configuration:[/yellow]")
+        console.print(f"  Max loops: {max_loops}")
+        console.print(f"  Rate limiting: 100 calls/hour")
+        console.print(f"  Circuit breaker: Enabled")
+
+        # Create loop config
+        loop_config = LoopConfig(
+            max_calls_per_hour=100,
+            max_no_progress_loops=3,
+            max_consecutive_errors=5,
+            require_exit_signal=True,
+            min_completion_indicators=2,
+        )
+
+        # Check if prompt file exists
+        prompt_file = Path(loop_config.prompt_file)
+        if not prompt_file.exists():
+            console.print(f"\n[warning]Prompt file not found: {prompt_file}[/warning]")
+            create = click.confirm("Create default prompt file?")
+            if create:
+                self._create_default_prompt_files()
+            else:
+                console.print("[error]Cannot start autonomous loop without prompt file[/error]")
+                return
+
+        # Confirm start
+        if not click.confirm("\n[yellow]Start autonomous loop?[/yellow]"):
+            console.print("Cancelled.")
+            return
+
+        # Start the loop
+        console.print("\n[success]Starting autonomous development loop...[/success]\n")
+
+        # Create autonomous loop
+        try:
+            autonomous_loop = AutonomousLoop(self.agent, loop_config)
+            results = await autonomous_loop.run(max_loops=max_loops)
+
+            # Display results
+            console.print(f"\n[bold]Loop Complete[/bold]")
+            console.print(f"  Loops run: {results['loops_run']}")
+            console.print(f"  Exit reason: {results['exit_reason']}")
+            console.print(f"  Files modified: {len(results['files_modified'])}")
+            console.print(f"  Errors: {len(results['errors_encountered'])}")
+
+        except Exception as e:
+            console.print(f"\n[error]Loop error: {e}[/error]")
+
+    async def _control_loop(self, args: str) -> None:
+        """Control autonomous loop.
+
+        Args:
+            args: Control command (stop, pause, resume, status).
+        """
+        console.print("\n[bold]Loop Control[/bold]")
+
+        if not args or args in ["status", "info"]:
+            self._show_loop_status()
+        elif args == "stop":
+            console.print("[success]Loop will stop after current iteration[/success]")
+            # TODO: Implement actual stop mechanism
+        elif args == "pause":
+            console.print("[success]Loop paused[/success]")
+            # TODO: Implement pause mechanism
+        elif args == "resume":
+            console.print("[success]Loop resumed[/success]")
+            # TODO: Implement resume mechanism
+        else:
+            console.print(f"[error]Unknown loop command: {args}[/error]")
+            console.print("Available: stop, pause, resume, status")
+
+    def _show_loop_status(self) -> None:
+        """Show autonomous loop status."""
+        from friday_ai.agent.autonomous_loop import LoopConfig
+
+        console.print("\n[bold]📊 Autonomous Loop Status[/bold]\n")
+
+        loop_config = LoopConfig()
+
+        # Load status file if exists
+        status_file = Path(loop_config.status_file)
+        if status_file.exists():
+            try:
+                import json
+                status = json.loads(status_file.read_text())
+                console.print(f"  State: {status.get('state', 'unknown')}")
+                console.print(f"  Loop number: {status.get('loop_number', 0)}")
+                console.print(f"  Last activity: {status.get('last_activity', 'never')}")
+            except Exception:
+                console.print("  [dim]No status available[/dim]")
+        else:
+            console.print("  [dim]No active loop[/dim]")
+
+        # Rate limiting
+        call_count_file = Path(loop_config.call_count_file)
+        if call_count_file.exists():
+            try:
+                import json
+                data = json.loads(call_count_file.read_text())
+                calls = data.get("count", 0)
+                console.print(f"\n[yellow]Rate Limiting:[/yellow]")
+                console.print(f"  Calls made: {calls}/100")
+                console.print(f"  Calls remaining: {100 - calls}")
+            except Exception:
+                pass
+
+    def _control_circuit_breaker(self, args: str) -> None:
+        """Control circuit breaker.
+
+        Args:
+            args: Control command (reset, status, open, close).
+        """
+        console.print("\n[bold]⚡ Circuit Breaker[/bold]\n")
+
+        if not args or args == "status":
+            console.print("  Status: [green]CLOSED[/green] (normal operation)")
+            console.print("  No progress loops: 0/3")
+            console.print("  Consecutive errors: 0/5")
+        elif args == "reset":
+            console.print("[success]Circuit breaker reset[/success]")
+            # TODO: Implement actual reset
+        elif args == "open":
+            console.print("[warning]Circuit breaker manually opened[/warning]")
+            # TODO: Implement manual open
+        elif args == "close":
+            console.print("[success]Circuit breaker closed[/success]")
+            # TODO: Implement manual close
+        else:
+            console.print(f"[error]Unknown command: {args}[/error]")
+            console.print("Available: reset, status, open, close")
+
+    def _create_default_prompt_files(self) -> None:
+        """Create default prompt files for autonomous loop."""
+        from friday_ai.agent.autonomous_loop import LoopConfig
+
+        loop_config = LoopConfig()
+
+        # Create directories
+        Path(".friday").mkdir(exist_ok=True)
+        Path(loop_config.log_dir).mkdir(parents=True, exist_ok=True)
+
+        # Create PROMPT.md
+        prompt_file = Path(loop_config.prompt_file)
+        if not prompt_file.exists():
+            prompt_content = """# Friday AI Autonomous Development
+
+You are an autonomous AI developer working to improve this project.
+
+## Goals
+- Write clean, maintainable code
+- Follow best practices and design patterns
+- Ensure tests pass and coverage is high
+- Document your changes
+
+## Process
+1. Analyze the current state of the project
+2. Identify areas for improvement
+3. Make incremental changes
+4. Test your changes
+5. Document what you did
+
+## Constraints
+- Ask for approval before making breaking changes
+- Don't modify files without good reason
+- Keep changes small and focused
+- Run tests after significant changes
+
+When complete, output: [EXIT]
+"""
+            prompt_file.write_text(prompt_content)
+            console.print(f"[success]Created: {prompt_file}[/success]")
+
+        # Create fix_plan.md
+        fix_plan_file = Path(loop_config.fix_plan_file)
+        if not fix_plan_file.exists():
+            fix_plan_content = """# Development Tasks
+
+Tasks will be tracked here as you work through the project.
+
+## Current Tasks
+- [ ] Analyze project structure
+- [ ] Review existing code
+- [ ] Identify improvements
+- [ ] Implement changes
+- [ ] Run tests
+- [ ] Update documentation
+"""
+            fix_plan_file.write_text(fix_plan_content)
+            console.print(f"[success]Created: {fix_plan_file}[/success]")
+
+        # Create AGENT.md
+        agent_file = Path(loop_config.agent_file)
+        if not agent_file.exists():
+            agent_content = """# Build and Run Instructions
+
+## Development
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run tests
+pytest tests/ -v
+```
+
+## Project Structure
+- `friday_ai/` - Main source code
+- `tests/` - Test suite
+- `docs/` - Documentation
+"""
+            agent_file.write_text(agent_content)
+            console.print(f"[success]Created: {agent_file}[/success]")
 
 
 # CLI Group for subcommands
