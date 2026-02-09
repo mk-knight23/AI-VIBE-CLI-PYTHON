@@ -4,57 +4,68 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Friday is a powerful AI assistant designed to help you with coding tasks, file management, database operations, container management, and information retrieval directly from your terminal.
+**Friday** is a powerful AI assistant designed to help you with coding tasks, file management, database operations, container management, and information retrieval directly from your terminal.
 
-## Features
+[**Version:** 1.0.0](CHANGELOG.md) | **Status:** Production/Stable | **License:** MIT
 
-- 🛠️ **15+ Built-in Tools**: File operations, shell commands, git, docker, database, HTTP requests, web search
-- 🧠 **Claude Integration**: Load agents, skills, rules, workflows, and commands from `.claude/` folders
-- 🔒 **Security First**: Secret scrubbing, approval policies, path validation, dangerous command detection
-- 💾 **Session Management**: Save, resume, and checkpoint sessions
-- 🔌 **MCP Support**: Connect to external tool servers via Model Context Protocol
-- 📝 **Rich TUI**: Beautiful terminal UI with syntax highlighting and progress tracking
+---
 
-## Installation
+## ✨ Features
+
+- 🛠️ **16+ Built-in Tools** - File operations, shell, git, docker, database, HTTP requests, web search
+- 🧠 **Claude Integration** - Load agents, skills, rules, workflows, and commands from `.claude/` folders
+- 🔒 **Security First** - Secret scrubbing, approval policies, path validation, dangerous command detection
+- 💾 **Session Management** - Save, resume, and checkpoint sessions
+- 🔌 **MCP Support** - Connect to external tool servers via Model Context Protocol
+- 📝 **Rich TUI** - Beautiful terminal UI with syntax highlighting and progress tracking
+- 🚀 **Autonomous Mode** - Ralph-inspired autonomous development loop with intelligent exit detection
+- 📊 **Enterprise Ready** - API server, monitoring, observability, circuit breakers, retry logic
+
+---
+
+## 🚀 Quick Start
+
+### Installation
 
 ```bash
 pip install friday-ai-teammate
 ```
 
-## Quick Start
+### Configuration
 
-### 1. Configuration
-Set up your API key:
+Set your API credentials:
+
 ```bash
-export API_KEY=your_sk_...
-export BASE_URL=https://api.minimax.io/v1  # or your preferred provider
+export API_KEY=your_api_key
+export BASE_URL=https://api.provider.com/v1
 ```
 
-Or create a `.env` file in your working directory:
+Or create a `.env` file:
 ```env
-API_KEY=your_sk_...
-BASE_URL=https://api.minimax.io/v1
+API_KEY=your_api_key
+BASE_URL=https://api.provider.com/v1
 ```
 
-### 2. Usage
+### Usage
 
-**Interactive Mode** - Launch the interactive shell:
+**Interactive mode:**
 ```bash
 friday
 ```
 
-**Single Prompt** - Run a specific task:
+**Single prompt:**
 ```bash
-friday "Scan the current directory for security risks"
+friday "Help me refactor this code"
 ```
 
-**Options**:
-- `-c, --cwd DIRECTORY`: Set the working directory for the agent
-- `--help`: Show available options
+**With working directory:**
+```bash
+friday -c /path/to/project "Review this codebase"
+```
 
-## Built-in Tools
+---
 
-Friday comes equipped with 15+ tools organized by category:
+## 📚 Built-in Tools
 
 ### File System
 | Tool | Description |
@@ -70,14 +81,14 @@ Friday comes equipped with 15+ tools organized by category:
 | Tool | Description |
 |------|-------------|
 | `shell` | Execute shell commands safely |
-| `git` | Git operations (status, log, diff, add, commit, branch, clone) |
+| `git` | Git operations (status, log, diff, add, commit, branch) |
 | `docker` | Docker container management (ps, logs, exec, build, compose) |
-| `database` | Execute SQL queries (PostgreSQL, MySQL, SQLite) |
+| `database` | SQL queries (PostgreSQL, MySQL, SQLite) |
 
 ### Network & Web
 | Tool | Description |
 |------|-------------|
-| `http_request` | Make HTTP requests (GET, POST, PUT, DELETE, PATCH, etc.) |
+| `http_request` | HTTP requests (GET, POST, PUT, DELETE, PATCH) |
 | `http_download` | Download files from URLs |
 | `web_search` | DuckDuckGo search |
 | `web_fetch` | Fetch URL content |
@@ -88,65 +99,105 @@ Friday comes equipped with 15+ tools organized by category:
 | `memory` | Persistent key-value storage |
 | `todos` | Task list management |
 
-## Claude Integration
+---
+
+## 🧠 Claude Integration
 
 Friday automatically discovers and integrates with `.claude/` folders:
 
-### What is `.claude`?
-
-The `.claude` folder contains specialized resources:
-
 ```
 .claude/
-├── agents/         # Sub-agent definitions
-├── skills/         # Reusable patterns and guidelines
-├── rules/          # Coding standards and rules
-├── commands/       # Slash command definitions
-└── workflows/      # Multi-step workflow templates
+├── agents/         # Sub-agent definitions (13 agents)
+├── skills/         # Reusable patterns (18 skills)
+├── rules/          # Coding standards (7 rules)
+├── commands/       # Slash commands (18 commands)
+└── workflows/      # Multi-step workflows (4 workflows)
 ```
 
-### Auto-Discovery
+### Available Commands
+- `/agents` - List available agents
+- `/skills` - List and activate skills
+- `/plan "task"` - Use planner agent
+- `/tdd` - Test-driven development
+- `/code-review` - Code review
+- `/workflow <name>` - Run workflow
 
-Friday automatically discovers `.claude` folders:
-1. Current working directory (walking up)
-2. `CLAUDE_DIR` environment variable
-3. `~/.claude/` in home directory
+---
 
-### Commands
+## 🔒 Security Features
 
-| Command | Description |
-|---------|-------------|
-| `/claude` | Show .claude integration status |
-| `/agents` | List available .claude agents |
-| `/skills` | List and activate skills |
-| `/skills <name>` | Activate a specific skill |
+- **Secret Scrubbing** - Automatically masks API keys, passwords in tool outputs
+- **Approval Policies** - Configure permission behavior (`/approval`)
+- **Path Validation** - Operations restricted to allowed directories
+- **Dangerous Command Detection** - Flags risky operations (rm -rf, sudo, etc.)
+- **Audit Logging** - Tamper-evident structured JSON logging
+- **Input Validation** - Protection against path traversal, command injection, SQL injection
 
-## Security Features
+---
 
-- **Secret Scrubbing**: Automatically masks sensitive information (API keys, passwords) in tool outputs
-- **Approval Policies**: Configure how the agent asks for permission before executing dangerous commands (`/approval`)
-- **Path Validation**: Operations are restricted to allowed directories to protect your system
-- **Dangerous Command Detection**: Automatically flags risky operations (rm -rf, sudo, etc.)
+## 🚀 Autonomous Mode
 
-## Development
+Ralph-inspired autonomous development with:
+
+- **Response Analysis** - JSON/text parsing, exit signal detection
+- **Circuit Breaker** - Three-state logic (CLOSED/HALF_OPEN/OPEN)
+- **Rate Limiting** - 100 calls/hour with auto-reset
+- **Session Continuity** - 24-hour session persistence
+- **Dual-Condition Exit** - Requires completion indicators + EXIT_SIGNAL
+
+```bash
+friday
+> /autonomous 50  # Run for 50 iterations
+```
+
+---
+
+## 📖 Documentation
+
+- **[USER-GUIDE.md](USER-GUIDE.md)** - Complete user documentation
+- **[DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md)** - Contributing and development
+- **[OPERATIONS-GUIDE.md](OPERATIONS-GUIDE.md)** - Installation, CI/CD, upgrades
+- **[PROJECT-DOCS.md](PROJECT-DOCS.md)** - Architecture, audits, implementation
+
+---
+
+## 🛠️ Development
 
 ### From Source
+
 ```bash
-git clone https://github.com/mk-knight23/Friday.git
-cd Friday
+git clone https://github.com/mk-knight23/AI-VIBE-CLI-PYTHON.git
+cd AI-VIBE-CLI-PYTHON
 pip install -e ".[dev]"
 ```
 
 ### Running Tests
+
 ```bash
 # Run all tests
-python tests/test_all_tools.py
-python tests/test_new_tools.py
+pytest tests/ -v
 
-# Run claude integration tests (requires pytest)
-pytest tests/test_claude_integration/ -v
+# Run specific test
+pytest tests/test_security.py -v
 ```
 
-## License
+---
 
-MIT
+## 📊 Version History
+
+See [CHANGELOG.md](CHANGELOG.md) for details.
+
+- **v1.0.0** - Enterprise features (API, monitoring, security, resilience)
+- **v0.3.0** - Ralph-inspired autonomous development
+- **v0.2.0** - Session management
+- **v0.1.0** - Initial release with tool system
+
+---
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+*Friday AI Teammate v1.0.0 - Enterprise Grade AI Coding Assistant*

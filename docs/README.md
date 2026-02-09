@@ -1,35 +1,65 @@
 # Friday AI Teammate - Documentation
 
-Welcome to the Friday AI Teammate documentation. This is a Python-based AI assistant framework for terminal-based coding workflows.
+**Consolidated Documentation** (v1.0.0)
 
-## Documentation Structure
+All documentation has been reorganized into 5 comprehensive files located in the project root:
 
-| Document | Purpose |
-|----------|---------|
-| [USER-GUIDE.md](USER-GUIDE.md) | Getting started and usage instructions |
-| [FEATURE-GUIDE.md](FEATURE-GUIDE.md) | Complete feature reference |
-| [COMMANDS.md](COMMANDS.md) | CLI commands and options |
-| [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md) | Contributing and development |
-| [BEST-PRACTICES.md](BEST-PRACTICES.md) | Python development standards |
-| [TESTING.md](TESTING.md) | Testing strategy and patterns |
-| [SECURITY.md](SECURITY.md) | Security features and guidelines |
-| [TECH-STACK.md](TECH-STACK.md) | Technology stack overview |
-| [WORKFLOWS.md](WORKFLOWS.md) | Common usage workflows |
-| [CICD.md](CICD.md) | CI/CD configuration |
-| [CLAUDE.md](CLAUDE.md) | AI assistant instructions |
-| [IMPLEMENTATION-PLAN.md](IMPLEMENTATION-PLAN.md) | Architecture decisions |
+## Core Documentation
 
-## .claude Folder Integration
+| Document | Purpose | Location |
+|----------|---------|----------|
+| **[README.md](../README.md)** | Project overview, quick start, features | Root directory |
+| **[USER-GUIDE.md](../USER-GUIDE.md)** | Complete user documentation | Root directory |
+| **[DEVELOPER-GUIDE.md](../DEVELOPER-GUIDE.md)** | Developer & contributing guide | Root directory |
+| **[OPERATIONS-GUIDE.md](../OPERATIONS-GUIDE.md)** | Installation, CI/CD, upgrades | Root directory |
+| **[PROJECT-DOCS.md](../PROJECT-DOCS.md)** | Architecture, audits, implementation | Root directory |
+| **[CHANGELOG.md](../CHANGELOG.md)** | Version history and changes | Root directory |
 
-Friday AI integrates with `.claude` folders to provide:
+## Quick Links
 
-- **Agents** - Specialized sub-agents from `.claude/agents/`
-- **Skills** - Contextual patterns from `.claude/skills/`
-- **Rules** - Coding standards from `.claude/rules/`
-- **Commands** - Slash commands from `.claude/commands/`
-- **Workflows** - Multi-step workflows from `.claude/workflows/`
+### For Users
+- **[Getting Started](../README.md#quick-start)** - Install and run Friday
+- **[Built-in Tools](../USER-GUIDE.md#built-in-tools)** - 16 tools for file, system, web operations
+- **[Claude Integration](../USER-GUIDE.md#claude-integration)** - 13 agents, 18 skills, workflows
+- **[Autonomous Mode](../USER-GUIDE.md#autonomous-mode)** - Ralph-inspired development loop
+- **[Session Management](../USER-GUIDE.md#session-management)** - Save, resume, checkpoint
 
-See [CLAUDE-INTEGRATION.md](CLAUDE-INTEGRATION.md) for details.
+### For Developers
+- **[Development Setup](../DEVELOPER-GUIDE.md#development-setup)** - Clone and install
+- **[Adding Tools](../DEVELOPER-GUIDE.md#adding-new-tools)** - Create custom tools
+- **[Testing](../DEVELOPER-GUIDE.md#testing)** - Run and write tests
+- **[Architecture](../PROJECT-DOCS.md#architecture-overview)** - System design
+- **[Best Practices](../DEVELOPER-GUIDE.md#best-practices)** - Coding standards
+
+### For Operations
+- **[Installation](../OPERATIONS-GUIDE.md#installation)** - Deploy Friday
+- **[Configuration](../OPERATIONS-GUIDE.md#configuration-management)** - Setup and config
+- **[CI/CD](../OPERATIONS-GUIDE.md#cicd-pipeline)** - GitHub Actions
+- **[Upgrading](../OPERATIONS-GUIDE.md#upgrading)** - Version upgrades
+- **[Monitoring](../OPERATIONS-GUIDE.md#monitoring)** - Metrics and logging
+
+## Archive
+
+Historical documentation files have been moved to the [archive/](archive/) directory:
+- Original 23 documentation files
+- Previous versions of guides
+- Legacy audit documents
+
+---
+
+## Project Overview
+
+Friday AI is an agent-based AI assistant for terminal-based coding workflows:
+
+- **16 Built-in Tools** - File operations, shell, git, docker, database, HTTP, web search
+- **Claude Integration** - Load agents, skills, rules, workflows from `.claude/` folders
+- **Security First** - Secret scrubbing, approval policies, path validation
+- **Session Management** - Save, resume, checkpoint sessions
+- **MCP Support** - Model Context Protocol for external tools
+- **Autonomous Mode** - Ralph-inspired development loop with circuit breaker
+- **Enterprise Ready** - API server, monitoring, observability, resilience
+
+---
 
 ## Quick Start
 
@@ -42,20 +72,9 @@ export API_KEY=your_api_key
 export BASE_URL=https://api.provider.com/v1
 
 # Run
-friday "Help me with this code"
+friday "Help me refactor this code"
 ```
-
-## Project Overview
-
-Friday AI is an agent-based AI assistant with:
-
-- **11 Built-in Tools** - File operations, shell, web search, memory, todos
-- **MCP Support** - Model Context Protocol for external tools
-- **Subagents** - Specialized agents for codebase investigation
-- **Hook System** - Customizable execution hooks
-- **Safety Features** - Approval policies and dangerous command detection
-- **Session Management** - Persistent sessions with save/restore
 
 ---
 
-*Documentation for Friday AI Teammate v0.0.2*
+*Documentation for Friday AI Teammate v1.0.0*
