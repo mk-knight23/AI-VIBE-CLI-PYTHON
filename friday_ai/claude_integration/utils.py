@@ -64,19 +64,26 @@ def parse_frontmatter(content: str) -> tuple[dict, str]:
     """
     import re
 
-    pattern = r"^---\s*\n(.*?)\n---\s*\n(.*)$"
+    # First, handle the empty frontmatter case: ---\n---\n...
+    if content.startswith("---\n---\n"):
+        return {}, content[8:].strip()  # Skip the first 8 chars "---\n---\n"
+
+    # Pattern for non-empty frontmatter
+    pattern = r"^---\s*\n(.*?)\n---\s*\n(.*)"
     match = re.match(pattern, content, re.DOTALL)
 
     if match:
         import yaml
 
+        frontmatter_text = match.group(1)
+        markdown = match.group(2)
+
         try:
-            frontmatter = yaml.safe_load(match.group(1)) or {}
+            frontmatter = yaml.safe_load(frontmatter_text) if frontmatter_text.strip() else {}
         except yaml.YAMLError:
             frontmatter = {}
 
-        markdown = match.group(2).strip()
-        return frontmatter, markdown
+        return frontmatter, markdown.strip()
 
     return {}, content.strip()
 

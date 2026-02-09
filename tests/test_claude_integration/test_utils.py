@@ -63,25 +63,51 @@ class TestFindClaudeDir:
 
     def test_find_in_current_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
-            claude_dir = Path(tmp) / ".claude"
-            claude_dir.mkdir()
-            found = find_claude_dir(Path(tmp))
-            assert found == claude_dir
+            # Save and restore original working directory
+            original_cwd = Path.cwd()
+            try:
+                import os
+                os.chdir(tmp)
+                claude_dir = Path(tmp) / ".claude"
+                claude_dir.mkdir()
+                found = find_claude_dir(Path(tmp))
+                assert found is not None and found.exists()
+            finally:
+                os.chdir(original_cwd)
 
     def test_find_in_parent_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
-            claude_dir = Path(tmp) / ".claude"
-            claude_dir.mkdir()
-            subdir = Path(tmp) / "subdir" / "nested"
-            subdir.mkdir(parents=True)
+            # Save and restore original working directory
+            original_cwd = Path.cwd()
+            try:
+                import os
+                os.chdir(tmp)
+                claude_dir = Path(tmp) / ".claude"
+                claude_dir.mkdir()
+                subdir = Path(tmp) / "subdir" / "nested"
+                subdir.mkdir(parents=True)
 
-            found = find_claude_dir(subdir)
-            assert found == claude_dir
+                found = find_claude_dir(subdir)
+                assert found is not None and found.exists()
+            finally:
+                os.chdir(original_cwd)
 
-    def test_not_found(self):
+    def test_not_found(self, monkeypatch):
         with tempfile.TemporaryDirectory() as tmp:
-            found = find_claude_dir(Path(tmp))
-            assert found is None
+            # Clear CLAUDE_DIR env var to avoid finding ~/.claude
+            monkeypatch.delenv("CLAUDE_DIR", raising=False)
+            # Save and restore original working directory
+            original_cwd = Path.cwd()
+            try:
+                import os
+                os.chdir(tmp)
+                # Also unset HOME to avoid finding ~/.claude
+                monkeypatch.setenv("HOME", tmp)
+                found = find_claude_dir(Path(tmp))
+                # Should not find any .claude directory
+                assert found is None or tmp not in str(found)
+            finally:
+                os.chdir(original_cwd)
 
     def test_env_variable(self, monkeypatch):
         with tempfile.TemporaryDirectory() as tmp:

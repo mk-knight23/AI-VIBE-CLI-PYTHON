@@ -15,7 +15,7 @@ class TestSkillsManager:
     def test_load_skill_with_frontmatter(self):
         with tempfile.TemporaryDirectory() as tmp:
             claude_dir = Path(tmp) / ".claude"
-            skills_dir = claude_dir / "test-skill"
+            skills_dir = claude_dir / "skills" / "test-skill"
             skills_dir.mkdir(parents=True)
 
             skill_file = skills_dir / "SKILL.md"
@@ -44,7 +44,7 @@ This is a test skill content.
     def test_load_skill_from_config_json(self):
         with tempfile.TemporaryDirectory() as tmp:
             claude_dir = Path(tmp) / ".claude"
-            skills_dir = claude_dir / "my-skill"
+            skills_dir = claude_dir / "skills" / "my-skill"
             skills_dir.mkdir(parents=True)
 
             skill_file = skills_dir / "SKILL.md"
@@ -84,7 +84,7 @@ Content.
     def test_get_relevant_skills(self):
         with tempfile.TemporaryDirectory() as tmp:
             claude_dir = Path(tmp) / ".claude"
-            skills_dir = claude_dir / "ts-skill"
+            skills_dir = claude_dir / "skills" / "ts-skill"
             skills_dir.mkdir(parents=True)
 
             skill_file = skills_dir / "SKILL.md"
