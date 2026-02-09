@@ -49,8 +49,12 @@ class Session:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
-    def is_expired(self, timeout_hours: int = 24) -> bool:
-        """Check if session has expired."""
+    def is_expired(self) -> bool:
+        """Check if session has expired (default 24 hour timeout)."""
+        return (datetime.now() - self.last_activity) >= timedelta(hours=24)
+
+    def is_expired_with_timeout(self, timeout_hours: int) -> bool:
+        """Check if session has expired with custom timeout."""
         return (datetime.now() - self.last_activity) >= timedelta(hours=timeout_hours)
 
     @property
@@ -171,9 +175,9 @@ class SessionManager:
         session_id = self._load_current_session()
         if session_id:
             session = self._load_session(session_id)
-            if session and not session.is_expired():
+            if session and not session.is_expired:
                 self._current_session = session
-                session.add_event(SessionEventType.RESUMUED, reason="Loaded from storage")
+                session.add_event(SessionEventType.RESUMED, reason="Loaded from storage")
                 return session
             else:
                 # Session expired or invalid
@@ -192,11 +196,11 @@ class SessionManager:
         """
         session = self._load_session(session_id)
         if session:
-            if session.is_expired():
+            if session.is_expired:
                 logger.warning(f"Session {session_id} has expired")
                 return None
 
-            session.add_event(SessionEventType.RESUMUED, reason="Manual resume")
+            session.add_event(SessionEventType.RESUMED, reason="Manual resume")
             self._current_session = session
             self._save_current_session(session_id)
             self._log_to_history(session, "resumed")
