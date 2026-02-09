@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Literal, Any
@@ -8,6 +9,9 @@ from urllib.parse import urljoin
 import httpx
 
 from friday_ai.tools.base import Tool, ToolConfirmation, ToolInvocation, ToolKind, ToolResult
+from friday_ai.resilience.retry import with_retry
+
+logger = logging.getLogger(__name__)
 
 
 class HttpRequestParams(BaseModel):
@@ -58,6 +62,23 @@ Examples:
     async def execute(self, invocation: ToolInvocation) -> ToolResult:
         params = HttpRequestParams(**invocation.params)
 
+        # Use retry for transient failures on GET/HEAD requests
+        if params.method in ["GET", "HEAD", "OPTIONS"]:
+            return await self._execute_with_retry(invocation, params)
+        else:
+            return await self._execute_once(invocation, params)
+
+    @with_retry(
+        max_retries=3,
+        base_delay=1.0,
+        retryable_exceptions=(httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError),
+    )
+    async def _execute_with_retry(self, invocation: ToolInvocation, params: HttpRequestParams) -> ToolResult:
+        """Execute HTTP request with retry logic for transient failures."""
+        return await self._execute_once(invocation, params)
+
+    async def _execute_once(self, invocation: ToolInvocation, params: HttpRequestParams) -> ToolResult:
+        """Execute a single HTTP request."""
         # Prepare headers
         headers = params.headers or {}
 

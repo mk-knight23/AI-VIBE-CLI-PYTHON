@@ -6,6 +6,10 @@ from pathlib import Path
 import sys
 from typing import Any
 import click
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from friday_ai.agent.agent import Agent
 
@@ -20,7 +24,7 @@ from friday_ai.ui.tui import TUI, get_console
 console = get_console()
 
 # Version information
-__version__ = "0.2.0"
+__version__ = "1.0.0"
 
 
 class CLI:
@@ -539,6 +543,8 @@ class CLI:
         if topic:
             await self._process_message(f"Explain {topic} with examples from this codebase")
 
+        self._autonomous_loop: AutonomousLoop | None = None
+
     async def _start_autonomous_loop(self, args: str) -> None:
         """Start autonomous development loop.
 
@@ -585,18 +591,27 @@ class CLI:
                 console.print("[error]Cannot start autonomous loop without prompt file[/error]")
                 return
 
-        # Confirm start
-        if not click.confirm("\n[yellow]Start autonomous loop?[/yellow]"):
-            console.print("Cancelled.")
-            return
+        # Confirm start (auto-accept in yolo mode)
+        if self.config.approval != ApprovalPolicy.YOLO:
+            if not click.confirm("\n[yellow]Start autonomous loop?[/yellow]"):
+                console.print("Cancelled.")
+                return
 
         # Start the loop
         console.print("\n[success]Starting autonomous development loop...[/success]\n")
 
         # Create autonomous loop
         try:
-            autonomous_loop = AutonomousLoop(self.agent, loop_config)
-            results = await autonomous_loop.run(max_loops=max_loops)
+            # Ensure agent is initialized
+            agent_initialized_here = False
+            if not self.agent:
+                from friday_ai.agent.agent import Agent
+                self.agent = Agent(self.config)
+                await self.agent.__aenter__()
+                agent_initialized_here = True
+
+            self._autonomous_loop = AutonomousLoop(self.agent, loop_config)
+            results = await self._autonomous_loop.run(max_loops=max_loops)
 
             # Display results
             console.print(f"\n[bold]Loop Complete[/bold]")
@@ -605,8 +620,16 @@ class CLI:
             console.print(f"  Files modified: {len(results['files_modified'])}")
             console.print(f"  Errors: {len(results['errors_encountered'])}")
 
+            # Cleanup if we initialized the agent
+            if agent_initialized_here:
+                await self.agent.__aexit__(None, None, None)
+                self.agent = None
+                self._autonomous_loop = None
+
         except Exception as e:
             console.print(f"\n[error]Loop error: {e}[/error]")
+            import traceback
+            console.print(f"[dim]{traceback.format_exc()}[/dim]")
 
     async def _control_loop(self, args: str) -> None:
         """Control autonomous loop.
@@ -619,14 +642,15 @@ class CLI:
         if not args or args in ["status", "info"]:
             self._show_loop_status()
         elif args == "stop":
-            console.print("[success]Loop will stop after current iteration[/success]")
-            # TODO: Implement actual stop mechanism
+            if self._autonomous_loop and self._autonomous_loop.is_running:
+                self._autonomous_loop.stop()
+                console.print("[success]Loop will stop after current iteration[/success]")
+            else:
+                console.print("[warning]No active loop to stop[/warning]")
         elif args == "pause":
-            console.print("[success]Loop paused[/success]")
-            # TODO: Implement pause mechanism
+            console.print("[warning]Pause not yet implemented. Use /loop stop to stop the loop.[/warning]")
         elif args == "resume":
-            console.print("[success]Loop resumed[/success]")
-            # TODO: Implement resume mechanism
+            console.print("[warning]Resume not yet implemented. Use /autonomous to start a new loop.[/warning]")
         else:
             console.print(f"[error]Unknown loop command: {args}[/error]")
             console.print("Available: stop, pause, resume, status")
@@ -674,19 +698,42 @@ class CLI:
         """
         console.print("\n[bold]⚡ Circuit Breaker[/bold]\n")
 
+        from friday_ai.agent.autonomous_loop import LoopConfig, CircuitBreakerState
+
+        # Get circuit breaker from active loop if available
+        circuit_breaker = None
+        if self._autonomous_loop:
+            circuit_breaker = self._autonomous_loop.circuit_breaker
+
         if not args or args == "status":
-            console.print("  Status: [green]CLOSED[/green] (normal operation)")
-            console.print("  No progress loops: 0/3")
-            console.print("  Consecutive errors: 0/5")
+            if circuit_breaker:
+                state_color = "green" if circuit_breaker.state == CircuitBreakerState.CLOSED else "red" if circuit_breaker.state == CircuitBreakerState.OPEN else "yellow"
+                console.print(f"  Status: [{state_color}]{circuit_breaker.state.value.upper()}[/{state_color}]")
+                console.print(f"  No progress loops: {circuit_breaker.no_progress_count}/{self._autonomous_loop.config.max_no_progress_loops if self._autonomous_loop else 3}")
+                console.print(f"  Consecutive errors: {circuit_breaker.consecutive_error_count}/{self._autonomous_loop.config.max_consecutive_errors if self._autonomous_loop else 5}")
+                console.print(f"  Completion indicators: {circuit_breaker.completion_count}/{self._autonomous_loop.config.max_completion_indicators if self._autonomous_loop else 5}")
+            else:
+                console.print("  Status: [green]CLOSED[/green] (normal operation)")
+                console.print("  No active loop - no circuit breaker data available")
         elif args == "reset":
-            console.print("[success]Circuit breaker reset[/success]")
-            # TODO: Implement actual reset
+            if circuit_breaker:
+                circuit_breaker.reset()
+                console.print("[success]Circuit breaker reset to CLOSED[/success]")
+            else:
+                console.print("[warning]No active loop to reset circuit breaker[/warning]")
         elif args == "open":
-            console.print("[warning]Circuit breaker manually opened[/warning]")
-            # TODO: Implement manual open
+            if circuit_breaker:
+                from friday_ai.agent.autonomous_loop import CircuitBreakerState
+                circuit_breaker.state = CircuitBreakerState.OPEN
+                console.print("[warning]Circuit breaker manually opened[/warning]")
+            else:
+                console.print("[warning]No active loop to open circuit breaker[/warning]")
         elif args == "close":
-            console.print("[success]Circuit breaker closed[/success]")
-            # TODO: Implement manual close
+            if circuit_breaker:
+                circuit_breaker.reset()  # Reset closes the circuit
+                console.print("[success]Circuit breaker closed[/success]")
+            else:
+                console.print("[warning]No active loop to close circuit breaker[/warning]")
         else:
             console.print(f"[error]Unknown command: {args}[/error]")
             console.print("Available: reset, status, open, close")

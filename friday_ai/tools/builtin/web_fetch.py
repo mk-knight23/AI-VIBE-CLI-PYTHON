@@ -2,6 +2,7 @@ from urllib.parse import urlparse
 
 import httpx
 from friday_ai.tools.base import Tool, ToolInvocation, ToolKind, ToolResult
+from friday_ai.resilience.retry import with_retry
 from pydantic import BaseModel, Field
 
 
@@ -28,6 +29,19 @@ class WebFetchTool(Tool):
         if not parsed.scheme or parsed.scheme not in ("http", "https"):
             return ToolResult.error_result(f"Url must be http:// or https://")
 
+        return await self._fetch_with_retry(params)
+
+    @with_retry(
+        max_retries=3,
+        base_delay=1.0,
+        retryable_exceptions=(httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError),
+    )
+    async def _fetch_with_retry(self, params: WebFetchParams) -> ToolResult:
+        """Fetch URL with retry logic for transient failures."""
+        return await self._fetch_once(params)
+
+    async def _fetch_once(self, params: WebFetchParams) -> ToolResult:
+        """Execute a single fetch request."""
         try:
             async with httpx.AsyncClient(
                 timeout=httpx.Timeout(params.timeout),

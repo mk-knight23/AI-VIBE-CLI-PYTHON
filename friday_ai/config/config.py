@@ -140,6 +140,10 @@ class Config(BaseModel):
         return os.environ.get("BASE_URL")
 
     @property
+    def redis_url(self) -> str | None:
+        return os.environ.get("REDIS_URL", "redis://localhost:6379")
+
+    @property
     def model_name(self) -> str:
         return self.model.name
 

@@ -3,6 +3,8 @@ import sys
 import os
 from pathlib import Path
 
+import pytest
+
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -11,6 +13,7 @@ from friday_ai.tools.base import ToolInvocation
 from friday_ai.tools.builtin.read_file import ReadFileTool
 from friday_ai.tools.builtin.grep import GrepTool
 
+@pytest.mark.asyncio
 async def test_secret_scrubbing():
     print("🛡️ Testing secret scrubbing...")
     config = Config()
