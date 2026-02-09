@@ -6,7 +6,7 @@
 
 **Friday** is a powerful AI assistant designed to help you with coding tasks, file management, database operations, container management, and information retrieval directly from your terminal.
 
-[**Version:** 1.0.0](CHANGELOG.md) | **Status:** Production/Stable | **License:** MIT
+[**Version:** 1.0.0](docs/CHANGELOG.md) | **Status:** Production/Stable | **License:** MIT
 
 ---
 
@@ -154,10 +154,10 @@ friday
 
 ## 📖 Documentation
 
-- **[USER-GUIDE.md](USER-GUIDE.md)** - Complete user documentation
-- **[DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md)** - Contributing and development
-- **[OPERATIONS-GUIDE.md](OPERATIONS-GUIDE.md)** - Installation, CI/CD, upgrades
-- **[PROJECT-DOCS.md](PROJECT-DOCS.md)** - Architecture, audits, implementation
+- **[USER-GUIDE.md](docs/USER-GUIDE.md)** - Complete user documentation
+- **[DEVELOPER-GUIDE.md](docs/DEVELOPER-GUIDE.md)** - Contributing and development
+- **[OPERATIONS-GUIDE.md](docs/OPERATIONS-GUIDE.md)** - Installation, CI/CD, upgrades
+- **[PROJECT-DOCS.md](docs/PROJECT-DOCS.md)** - Architecture, audits, implementation
 
 ---
 
@@ -185,7 +185,7 @@ pytest tests/test_security.py -v
 
 ## 📊 Version History
 
-See [CHANGELOG.md](CHANGELOG.md) for details.
+See [CHANGELOG.md](docs/CHANGELOG.md) for details.
 
 - **v1.0.0** - Enterprise features (API, monitoring, security, resilience)
 - **v0.3.0** - Ralph-inspired autonomous development

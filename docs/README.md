@@ -9,11 +9,11 @@ All documentation has been reorganized into 5 comprehensive files located in the
 | Document | Purpose | Location |
 |----------|---------|----------|
 | **[README.md](../README.md)** | Project overview, quick start, features | Root directory |
-| **[USER-GUIDE.md](../USER-GUIDE.md)** | Complete user documentation | Root directory |
-| **[DEVELOPER-GUIDE.md](../DEVELOPER-GUIDE.md)** | Developer & contributing guide | Root directory |
-| **[OPERATIONS-GUIDE.md](../OPERATIONS-GUIDE.md)** | Installation, CI/CD, upgrades | Root directory |
-| **[PROJECT-DOCS.md](../PROJECT-DOCS.md)** | Architecture, audits, implementation | Root directory |
-| **[CHANGELOG.md](../CHANGELOG.md)** | Version history and changes | Root directory |
+| **[USER-GUIDE.md](USER-GUIDE.md)** | Complete user documentation | docs/ |
+| **[DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md)** | Developer & contributing guide | docs/ |
+| **[OPERATIONS-GUIDE.md](OPERATIONS-GUIDE.md)** | Installation, CI/CD, upgrades | docs/ |
+| **[PROJECT-DOCS.md](PROJECT-DOCS.md)** | Architecture, audits, implementation | docs/ |
+| **[CHANGELOG.md](CHANGELOG.md)** | Version history and changes | docs/ |
 
 ## Quick Links
 
