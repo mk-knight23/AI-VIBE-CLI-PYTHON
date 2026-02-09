@@ -13,6 +13,7 @@ This is **Friday AI Teammate**, a Python-based AI assistant CLI tool for termina
 - **CLI Command:** `friday`
 - **Architecture:** Agent-based with tool system
 - **License:** MIT
+- **Version:** 1.0.0
 
 ---
 
@@ -127,6 +128,9 @@ All documentation is in `docs/`:
 | `CICD.md` | CI/CD configuration |
 | `CLAUDE.md` | This file - AI assistant context |
 | `IMPLEMENTATION-PLAN.md` | Architecture decisions |
+| `AUTONOMOUS-MODE.md` | Autonomous development guide |
+| `SESSION-MANAGEMENT.md` | Session management guide |
+| `UPGRADE-v0.3.0.md` | v0.3.0 upgrade notes |
 
 ---
 
@@ -152,6 +156,25 @@ All documentation is in `docs/`:
 - Configure in `config.toml` under `[mcp_servers]`
 - Supports stdio and HTTP/SSE transports
 
+### Autonomous Mode
+
+Ralph-inspired autonomous development loop:
+- `/autonomous [max_loops]` - Start continuous development
+- Dual-condition exit gate (completion indicators + EXIT_SIGNAL)
+- Circuit breaker prevents runaway loops
+- Rate limiting (100 calls/hour)
+- Session continuity across iterations
+- Real-time status updates in `.friday/status.json`
+
+### .claude Integration
+
+Full support for `.claude/` folder structure:
+- **Agents** (`/agents`) - Load from `.claude/agents/`
+- **Skills** (`/skills`) - Load from `.claude/skills/`
+- **Commands** (`/command`) - Load from `.claude/commands/`
+- **Workflows** (`/workflow`) - Load from `.claude/workflows/`
+- **Rules** - Auto-loaded from `.claude/rules/`
+
 ---
 
-*Claude Instructions v1.0 - Friday AI Teammate*
+*Claude Instructions v1.1 - Friday AI Teammate v0.3.0*

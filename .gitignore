@@ -40,3 +40,11 @@ ENV/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Friday AI runtime files
+.friday/
+database.db
+*.db
+
+# Session files
+.session_id
