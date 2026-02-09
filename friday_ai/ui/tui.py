@@ -276,7 +276,11 @@ class TUI:
 
         if name == "read_file" and success:
             if primary_path:
-                start_line, code = self._extract_read_file_code(output)
+                extracted = self._extract_read_file_code(output)
+                if extracted is None:
+                    start_line, code = 1, output
+                else:
+                    start_line, code = extracted
 
                 shown_start = metadata.get("shown_start")
                 shown_end = metadata.get("shown_end")
@@ -595,26 +599,67 @@ class TUI:
         help_text = """
 ## Commands
 
+### Session Management
 - `/help` - Show this help
 - `/exit` or `/quit` - Exit the agent
 - `/clear` - Clear conversation history
-- `/config` - Show current configuration
-- `/model <name>` - Change the model
-- `/approval <mode>` - Change approval mode
-- `/stats` - Show session statistics
-- `/tools` - List available tools
-- `/mcp` - Show MCP server status
 - `/save` - Save current session
-- `/checkpoint [name]` - Create a checkpoint
-- `/checkpoints` - List available checkpoints
-- `/restore <checkpoint_id>` - Restore a checkpoint
 - `/sessions` - List saved sessions
 - `/resume <session_id>` - Resume a saved session
+- `/checkpoint` - Create a checkpoint
+- `/restore <checkpoint_id>` - Restore a checkpoint
+
+### Configuration
+- `/config` - Show current configuration
+- `/model <name>` - Change the model
+- `/approval <mode>` - Change approval mode (yolo, auto, auto-edit, on-request, on-failure, never)
+- `/stats` - Show session statistics
+
+### Tools & Workflows
+- `/tools` - List available tools
+- `/mcp` - Show MCP server status
+- `/workflow <name>` - Run a workflow (code-review, refactor, debug, learn)
+
+### .claude Integration
+- `/claude` - Show .claude integration status
+- `/agents` - List available .claude agents
+- `/skills` - List and activate skills
+- `/skills <name>` - Activate a specific skill
+
+## Available Tools
+
+### File Operations
+- `read_file` - Read file contents with line numbers
+- `write_file` - Create or overwrite files
+- `edit_file` - Surgical text replacement
+- `list_dir` - List directory contents
+- `glob` - Find files by pattern
+- `grep` - Search file contents
+
+### System & Network
+- `shell` - Execute shell commands safely
+- `git` - Git operations (status, log, diff, add, commit, branch, clone)
+- `http_request` - Make HTTP requests (GET, POST, PUT, DELETE, PATCH, etc.)
+- `http_download` - Download files from URLs
+
+### Infrastructure
+- `docker` - Docker container management (ps, logs, exec, build, compose)
+- `database` - Execute SQL queries (PostgreSQL, MySQL, SQLite)
+
+### Web & Search
+- `web_search` - DuckDuckGo search
+- `web_fetch` - Fetch URL content
+
+### Utilities
+- `memory` - Persistent key-value storage
+- `todos` - Task list management
 
 ## Tips
 
 - Just type your message to chat with the agent
-- The agent can read, write, and execute code
-- Some operations require approval (can be configured)
+- The agent can read, write, edit files and execute commands
+- Use `/workflow code-review` for guided code reviews
+- Some operations require approval (can be configured with `/approval`)
+- Create checkpoints before major changes: `/checkpoint`
 """
         self.console.print(Markdown(help_text))

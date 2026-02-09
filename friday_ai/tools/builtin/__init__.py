@@ -1,6 +1,10 @@
+from friday_ai.tools.builtin.database import DatabaseTool
+from friday_ai.tools.builtin.docker import DockerTool
 from friday_ai.tools.builtin.edit_file import EditTool
+from friday_ai.tools.builtin.git import GitTool
 from friday_ai.tools.builtin.glob import GlobTool
 from friday_ai.tools.builtin.grep import GrepTool
+from friday_ai.tools.builtin.http_request import HttpDownloadTool, HttpTool
 from friday_ai.tools.builtin.list_dir import ListDirTool
 from friday_ai.tools.builtin.memory import MemoryTool
 from friday_ai.tools.builtin.read_file import ReadFileTool
@@ -22,6 +26,11 @@ __all__ = [
     "WebFetchTool",
     "TodosTool",
     "MemoryTool",
+    "GitTool",
+    "HttpRequestTool",
+    "HttpDownloadTool",
+    "DockerTool",
+    "DatabaseTool",
 ]
 
 
@@ -38,4 +47,9 @@ def get_all_builtin_tools() -> list[type]:
         WebFetchTool,
         TodosTool,
         MemoryTool,
+        GitTool,
+        HttpTool,
+        HttpDownloadTool,
+        DockerTool,
+        DatabaseTool,
     ]

@@ -153,4 +153,21 @@ def create_default_registry(config: Config) -> ToolRegistry:
     for subagent_def in get_default_subagent_definitions():
         registry.register(SubagentTool(config, subagent_def))
 
+    # Load .claude agents as subagent tools
+    if config.claude_agents_enabled:
+        try:
+            from friday_ai.claude_integration.agent_loader import ClaudeAgentLoader
+            from friday_ai.claude_integration.utils import find_claude_dir
+
+            claude_dir = config.get_claude_dir() if hasattr(config, 'get_claude_dir') else find_claude_dir(config.cwd)
+            if claude_dir:
+                agent_loader = ClaudeAgentLoader(claude_dir)
+                agents = agent_loader.load_all_agents()
+                for agent_def in agents:
+                    subagent_def = agent_loader.convert_to_subagent_definition(agent_def, config)
+                    registry.register(SubagentTool(config, subagent_def))
+                    logger.debug(f"Registered .claude agent as tool: {subagent_def.name}")
+        except Exception as e:
+            logger.warning(f"Failed to load .claude agents: {e}")
+
     return registry

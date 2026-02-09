@@ -14,21 +14,25 @@ from datetime import datetime
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config.config import Config
-from tools.base import ToolInvocation
+from friday_ai.config.config import Config
+from friday_ai.tools.base import ToolInvocation
 
 # Import all tools
-from tools.builtin.read_file import ReadFileTool
-from tools.builtin.write_file import WriteFileTool
-from tools.builtin.edit_file import EditTool
-from tools.builtin.list_dir import ListDirTool
-from tools.builtin.glob import GlobTool
-from tools.builtin.grep import GrepTool
-from tools.builtin.shell import ShellTool
-from tools.builtin.web_search import WebSearchTool
-from tools.builtin.web_fetch import WebFetchTool
-from tools.builtin.memory import MemoryTool
-from tools.builtin.todo import TodosTool
+from friday_ai.tools.builtin.read_file import ReadFileTool
+from friday_ai.tools.builtin.write_file import WriteFileTool
+from friday_ai.tools.builtin.edit_file import EditTool
+from friday_ai.tools.builtin.list_dir import ListDirTool
+from friday_ai.tools.builtin.glob import GlobTool
+from friday_ai.tools.builtin.grep import GrepTool
+from friday_ai.tools.builtin.shell import ShellTool
+from friday_ai.tools.builtin.web_search import WebSearchTool
+from friday_ai.tools.builtin.web_fetch import WebFetchTool
+from friday_ai.tools.builtin.memory import MemoryTool
+from friday_ai.tools.builtin.todo import TodosTool
+from friday_ai.tools.builtin.git import GitTool
+from friday_ai.tools.builtin.database import DatabaseTool
+from friday_ai.tools.builtin.docker import DockerTool
+from friday_ai.tools.builtin.http_request import HttpTool
 
 
 class ToolTester:

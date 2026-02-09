@@ -1,0 +1,10 @@
+services:
+  - type: webstatic
+    name: portfolio
+    env: node
+    buildCommand: npm run build
+    publishPath: ./dist
+    routes:
+      - type: rewrite
+        regex: ^.*
+        destination: /index.html

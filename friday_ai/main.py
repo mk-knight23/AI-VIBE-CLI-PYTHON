@@ -1,17 +1,26 @@
 import asyncio
+import json
+import logging
+import os
 from pathlib import Path
 import sys
+from typing import Any
 import click
 
 from friday_ai.agent.agent import Agent
+
+logger = logging.getLogger(__name__)
 from friday_ai.agent.events import AgentEventType
 from friday_ai.agent.persistence import PersistenceManager, SessionSnapshot
 from friday_ai.agent.session import Session
 from friday_ai.config.config import ApprovalPolicy, Config
-from friday_ai.config.loader import load_config
+from friday_ai.config.loader import load_config, get_data_dir
 from friday_ai.ui.tui import TUI, get_console
 
 console = get_console()
+
+# Version information
+__version__ = "0.1.0"
 
 
 class CLI:
@@ -19,6 +28,68 @@ class CLI:
         self.agent: Agent | None = None
         self.config = config
         self.tui = TUI(config, console)
+        self._claude_context: Any | None = None
+        self._command_mapper: Any | None = None
+        self._workflow_engine: Any | None = None
+
+    def _init_claude_integration(self) -> None:
+        """Initialize .claude folder integration if enabled."""
+        if not self.config.claude_dir and not self.config.get_claude_dir():
+            return
+
+        try:
+            from friday_ai.claude_integration import (
+                ClaudeAgentLoader,
+                CommandMapper,
+                RulesEngine,
+                SkillsManager,
+                WorkflowEngine,
+            )
+            from friday_ai.claude_integration.context import ClaudeContext
+
+            claude_dir = self.config.get_claude_dir()
+            if not claude_dir:
+                return
+
+            # Initialize context
+            self._claude_context = ClaudeContext(claude_dir=claude_dir)
+
+            # Load agents
+            if self.config.claude_agents_enabled:
+                agent_loader = ClaudeAgentLoader(claude_dir)
+                agents = agent_loader.load_all_agents()
+                for agent_def in agents:
+                    self._claude_context.agents[agent_def.name] = agent_def
+
+            # Load skills
+            if self.config.claude_skills_enabled:
+                skills_manager = SkillsManager(claude_dir)
+                skills = skills_manager.load_all_skills()
+                for skill in skills:
+                    self._claude_context.skills[skill.name] = skill
+
+            # Load rules
+            if self.config.claude_rules_enabled:
+                rules_engine = RulesEngine(claude_dir)
+                rules = rules_engine.load_all_rules()
+                self._claude_context.rules = rules
+
+            # Load workflows
+            if self.config.claude_workflows_enabled:
+                self._workflow_engine = WorkflowEngine(claude_dir)
+                self._workflow_engine.load_all_workflows()
+                for workflow in self._workflow_engine.list_workflows():
+                    self._claude_context.workflows[workflow.name] = workflow
+
+            # Load commands
+            if self.config.claude_commands_enabled:
+                self._command_mapper = CommandMapper(claude_dir)
+                self._command_mapper.load_all_commands()
+                for cmd in self._command_mapper.list_commands():
+                    self._claude_context.commands[cmd.name] = cmd
+
+        except Exception as e:
+            logger.debug(f"Failed to initialize .claude integration: {e}")
 
     async def run_single(self, message: str) -> str | None:
         async with Agent(self.config) as agent:
@@ -122,6 +193,7 @@ class CLI:
         parts = cmd.split(maxsplit=1)
         cmd_name = parts[0]
         cmd_args = parts[1] if len(parts) > 1 else ""
+
         if cmd_name == "/exit" or cmd_name == "/quit":
             return False
         elif command == "/help":
@@ -298,12 +370,482 @@ class CLI:
                     console.print(
                         f"[success]Restored session: {session.session_id}, checkpoint: {cmd_args}[/success]"
                     )
+        elif cmd_name == "/workflow":
+            if not cmd_args:
+                console.print("[error]Usage: /workflow <name> [/error]")
+                console.print("Available workflows: code-review, refactor, debug, learn")
+            else:
+                await self._run_workflow(cmd_args)
+        elif cmd_name == "/claude":
+            # Show .claude integration status
+            if not self._claude_context:
+                self._init_claude_integration()
+            if self._claude_context:
+                console.print("\n[bold].claude Integration Status[/bold]")
+                console.print(f"  Agents: {len(self._claude_context.agents)}")
+                console.print(f"  Skills: {len(self._claude_context.skills)}")
+                console.print(f"  Rules: {len(self._claude_context.rules)}")
+                console.print(f"  Workflows: {len(self._claude_context.workflows)}")
+                console.print(f"  Commands: {len(self._claude_context.commands)}")
+            else:
+                console.print("[warning].claude directory not found[/warning]")
+        elif cmd_name == "/agents":
+            # List available .claude agents
+            if not self._claude_context:
+                self._init_claude_integration()
+            if self._claude_context and self._claude_context.agents:
+                console.print("\n[bold]Available Agents[/bold]")
+                for name, agent_def in self._claude_context.agents.items():
+                    console.print(f"  • {name}: {agent_def.description[:60]}...")
+            else:
+                console.print("[dim]No .claude agents found[/dim]")
+        elif cmd_name == "/skills":
+            # List and activate skills
+            if not cmd_args:
+                if not self._claude_context:
+                    self._init_claude_integration()
+                if self._claude_context and self._claude_context.skills:
+                    console.print("\n[bold]Available Skills[/bold]")
+                    for name, skill in self._claude_context.skills.items():
+                        active = "[green]●[/green]" if name in self._claude_context.active_skills else "○"
+                        console.print(f"  {active} {name}: {skill.description[:50]}...")
+                    console.print("\nUse /skills <name> to activate")
+                else:
+                    console.print("[dim]No .claude skills found[/dim]")
+            else:
+                # Activate a skill
+                if not self._claude_context:
+                    self._init_claude_integration()
+                if self._claude_context:
+                    if self._claude_context.activate_skill(cmd_args):
+                        console.print(f"[success]Activated skill: {cmd_args}[/success]")
+                    else:
+                        console.print(f"[error]Skill not found: {cmd_args}[/error]")
         else:
-            console.print(f"[error]Unknown command: {cmd_name}[/error]")
+            # Check for .claude commands
+            if not self._command_mapper:
+                self._init_claude_integration()
+
+            if self._command_mapper:
+                claude_cmd = self._command_mapper.get_command(cmd_name.lstrip("/"))
+                if claude_cmd:
+                    await self._execute_claude_command(claude_cmd, cmd_args)
+                else:
+                    console.print(f"[error]Unknown command: {cmd_name}[/error]")
+            else:
+                console.print(f"[error]Unknown command: {cmd_name}[/error]")
 
         return True
 
+    async def _execute_claude_command(self, command: Any, args: str) -> None:
+        """Execute a .claude command."""
+        from friday_ai.claude_integration.command_mapper import SlashCommand
 
+        if not isinstance(command, SlashCommand):
+            return
+
+        try:
+            # Build the prompt
+            prompt = command.build_prompt(args)
+
+            if command.workflow:
+                # Execute workflow
+                console.print(f"\n[bold]Running workflow: {command.workflow}[/bold]")
+                await self._run_workflow(command.workflow)
+            elif command.agent:
+                # Invoke agent
+                console.print(f"\n[bold]Invoking agent: {command.agent}[/bold]")
+                await self._process_message(prompt)
+            elif command.skill:
+                # Activate skill and process
+                if self._claude_context and self._claude_context.activate_skill(command.skill):
+                    console.print(f"[success]Activated skill: {command.skill}[/success]")
+                await self._process_message(prompt)
+            else:
+                # Just process the prompt
+                await self._process_message(prompt)
+        except Exception as e:
+            console.print(f"[error]Error executing command: {e}[/error]")
+
+    async def _run_workflow(self, workflow_name: str):
+        """Run a predefined workflow or .claude workflow."""
+        # Check for built-in workflows first
+        workflows = {
+            "code-review": self._workflow_code_review,
+            "refactor": self._workflow_refactor,
+            "debug": self._workflow_debug,
+            "learn": self._workflow_learn,
+        }
+
+        if workflow_name in workflows:
+            await workflows[workflow_name]()
+            return
+
+        # Check for .claude workflows
+        if self._workflow_engine:
+            workflow = self._workflow_engine.get_workflow(workflow_name)
+            if workflow:
+                console.print(f"\n[bold]Running workflow: {workflow.name}[/bold]")
+                console.print(workflow.description)
+                # For now, just process a message with the workflow context
+                # Full workflow execution would require more complex orchestration
+                prompt = f"Follow this workflow: {workflow.name}\n\n{workflow.description}"
+                if workflow.steps:
+                    prompt += "\n\nSteps:\n"
+                    for i, step in enumerate(workflow.steps, 1):
+                        prompt += f"{i}. {step.name}: {step.description}\n"
+                await self._process_message(prompt)
+                return
+
+        console.print(f"[error]Unknown workflow: {workflow_name}[/error]")
+
+    async def _workflow_code_review(self):
+        """Code review workflow."""
+        console.print("\n[bold]Code Review Workflow[/bold]")
+        file_path = console.input("Enter file path to review: ").strip()
+        if file_path:
+            await self._process_message(f"Review the code in {file_path} for bugs, security issues, and best practices")
+
+    async def _workflow_refactor(self):
+        """Refactoring workflow."""
+        console.print("\n[bold]Refactoring Workflow[/bold]")
+        file_path = console.input("Enter file path to refactor: ").strip()
+        if file_path:
+            await self._process_message(f"Suggest refactoring improvements for {file_path}. Focus on readability, performance, and maintainability.")
+
+    async def _workflow_debug(self):
+        """Debugging workflow."""
+        console.print("\n[bold]Debugging Workflow[/bold]")
+        error_msg = console.input("Describe the error or issue: ").strip()
+        if error_msg:
+            await self._process_message(f"Help me debug this issue: {error_msg}")
+
+    async def _workflow_learn(self):
+        """Learning workflow."""
+        console.print("\n[bold]Learning Workflow[/bold]")
+        topic = console.input("What topic do you want to learn about? ").strip()
+        if topic:
+            await self._process_message(f"Explain {topic} with examples from this codebase")
+
+
+# CLI Group for subcommands
+@click.group(invoke_without_command=True)
+@click.argument("prompt", required=False)
+@click.option(
+    "--cwd",
+    "-c",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="Current working directory",
+)
+@click.option(
+    "--version",
+    "-v",
+    is_flag=True,
+    help="Show version information",
+)
+@click.option(
+    "--config",
+    "show_config",
+    is_flag=True,
+    help="Show current configuration",
+)
+@click.option(
+    "--approval",
+    "-a",
+    type=click.Choice([p.value for p in ApprovalPolicy]),
+    help="Set approval policy",
+)
+@click.option(
+    "--model",
+    "-m",
+    help="Set AI model",
+)
+@click.pass_context
+def cli(
+    ctx,
+    prompt: str | None,
+    cwd: Path | None,
+    version: bool,
+    show_config: bool,
+    approval: str | None,
+    model: str | None,
+):
+    """Friday AI - Your intelligent coding assistant.
+
+    Examples:
+        friday                    # Start interactive mode
+        friday "Hello!"          # Single prompt
+        friday -c /path/to/code  # Set working directory
+        friday --version         # Show version
+    """
+    if version:
+        console.print(f"Friday AI Teammate v{__version__}")
+        ctx.exit()
+
+    if show_config:
+        try:
+            config = load_config(cwd=cwd)
+            console.print("\n[bold]Configuration[/bold]")
+            console.print(f"  Model: {config.model_name}")
+            console.print(f"  Temperature: {config.temperature}")
+            console.print(f"  Approval: {config.approval.value}")
+            console.print(f"  Working Dir: {config.cwd}")
+            console.print(f"  Config Files:")
+            user_config = Path.home() / ".config" / "ai-agent" / "config.toml"
+            project_config = (cwd or Path.cwd()) / ".ai-agent" / "config.toml"
+            console.print(f"    - User: {user_config} ({'exists' if user_config.exists() else 'not found'})")
+            console.print(f"    - Project: {project_config} ({'exists' if project_config.exists() else 'not found'})")
+        except Exception as e:
+            console.print(f"[error]Error loading config: {e}[/error]")
+        ctx.exit()
+
+    # Handle subcommands
+    if ctx.invoked_subcommand is None:
+        # No subcommand, run main logic
+        try:
+            config = load_config(cwd=cwd)
+        except Exception as e:
+            console.print(f"[error]Configuration Error: {e}[/error]")
+            ctx.exit(1)
+
+        # Override config with CLI options
+        if approval:
+            config.approval = ApprovalPolicy(approval)
+        if model:
+            config.model_name = model
+
+        errors = config.validate()
+        if errors:
+            for error in errors:
+                console.print(f"[error]{error}[/error]")
+            ctx.exit(1)
+
+        friday_cli = CLI(config)
+
+        if prompt:
+            result = asyncio.run(friday_cli.run_single(prompt))
+            if result is None:
+                ctx.exit(1)
+        else:
+            asyncio.run(friday_cli.run_interactive())
+
+
+@cli.command()
+@click.option(
+    "--cwd",
+    "-c",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="Project directory to initialize",
+)
+def init(cwd: Path | None):
+    """Initialize a new Friday AI project configuration."""
+    target_dir = cwd or Path.cwd()
+    config_dir = target_dir / ".ai-agent"
+    config_file = config_dir / "config.toml"
+
+    if config_file.exists():
+        console.print(f"[warning]Configuration already exists at {config_file}[/warning]")
+        overwrite = click.confirm("Overwrite?")
+        if not overwrite:
+            console.print("Cancelled.")
+            return
+
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    config_content = '''# Friday AI Project Configuration
+[model]
+name = "GLM-4.7"
+temperature = 1.0
+
+# Project settings
+cwd = "."
+approval = "auto"
+max_turns = 100
+
+# Shell environment
+[shell_environment]
+ignore_default_excludes = false
+exclude_patterns = ["*KEY*", "*TOKEN*", "*SECRET*"]
+
+# MCP servers (optional)
+# [mcp_servers.filesystem]
+# command = "npx"
+# args = ["-y", "@modelcontextprotocol/server-filesystem", "."]
+# enabled = true
+'''
+
+    config_file.write_text(config_content)
+    console.print(f"[success]Created configuration at {config_file}[/success]")
+
+    # Create tools directory
+    tools_dir = config_dir / "tools"
+    tools_dir.mkdir(exist_ok=True)
+
+    # Create example custom tool
+    example_tool = tools_dir / "example.py"
+    if not example_tool.exists():
+        example_tool.write_text('''from friday_ai.tools.base import Tool, ToolInvocation, ToolKind, ToolResult
+
+class ExampleTool(Tool):
+    name = "example"
+    kind = ToolKind.READ
+    description = "An example custom tool"
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "input": {"type": "string", "description": "Input to process"}
+        },
+        "required": ["input"]
+    }
+
+    async def execute(self, invocation: ToolInvocation) -> ToolResult:
+        params = invocation.params
+        input_val = params.get("input", "")
+        return ToolResult.success_result(f"Processed: {input_val}")
+''')
+        console.print(f"[success]Created example tool at {example_tool}[/success]")
+
+
+@cli.command()
+@click.option(
+    "--global",
+    "global_",
+    is_flag=True,
+    help="Edit global configuration",
+)
+def config(global_: bool):
+    """Show or edit configuration."""
+    if global_:
+        config_path = Path.home() / ".config" / "ai-agent" / "config.toml"
+    else:
+        config_path = Path.cwd() / ".ai-agent" / "config.toml"
+
+    if not config_path.exists():
+        console.print(f"[error]Configuration not found at {config_path}[/error]")
+        console.print("Run 'friday init' to create a configuration.")
+        return
+
+    console.print(f"\n[bold]Configuration at {config_path}:[/bold]\n")
+    content = config_path.read_text()
+    console.print(content)
+
+
+@cli.command()
+@click.option(
+    "--all",
+    "list_all",
+    is_flag=True,
+    help="List all available workflows",
+)
+def workflow(list_all: bool):
+    """List available workflows."""
+    if list_all:
+        console.print("\n[bold]Available Workflows[/bold]\n")
+
+        workflows = {
+            "code-review": {
+                "description": "Review code for bugs, security issues, and best practices",
+                "usage": "/workflow code-review",
+            },
+            "refactor": {
+                "description": "Get refactoring suggestions for better code quality",
+                "usage": "/workflow refactor",
+            },
+            "debug": {
+                "description": "Help debug errors and issues",
+                "usage": "/workflow debug",
+            },
+            "learn": {
+                "description": "Learn about a topic with codebase examples",
+                "usage": "/workflow learn",
+            },
+        }
+
+        for name, info in workflows.items():
+            console.print(f"[bold]{name}[/bold]")
+            console.print(f"  Description: {info['description']}")
+            console.print(f"  Usage: {info['usage']}")
+            console.print()
+
+
+@cli.command()
+@click.argument("session_id", required=False)
+def resume(session_id: str | None):
+    """Resume a saved session."""
+    if not session_id:
+        # List available sessions
+        persistence_manager = PersistenceManager()
+        sessions = persistence_manager.list_sessions()
+
+        if not sessions:
+            console.print("No saved sessions found.")
+            return
+
+        console.print("\n[bold]Saved Sessions[/bold]")
+        for i, s in enumerate(sessions, 1):
+            console.print(f"  {i}. {s['session_id']} (turns: {s['turn_count']})")
+
+        # Ask user to select
+        choice = click.prompt("\nSelect session number", type=int, default=1)
+        if 1 <= choice <= len(sessions):
+            session_id = sessions[choice - 1]["session_id"]
+        else:
+            console.print("[error]Invalid selection[/error]")
+            return
+
+    # Resume the session
+    try:
+        config = load_config()
+        friday_cli = CLI(config)
+
+        async def do_resume():
+            persistence_manager = PersistenceManager()
+            snapshot = persistence_manager.load_session(session_id)
+
+            if not snapshot:
+                console.print(f"[error]Session not found: {session_id}[/error]")
+                return
+
+            async with Agent(config) as agent:
+                friday_cli.agent = agent
+
+                # Restore session state
+                session = Session(config=config)
+                await session.initialize()
+                session.session_id = snapshot.session_id
+                session.created_at = snapshot.created_at
+                session.updated_at = snapshot.updated_at
+                session.turn_count = snapshot.turn_count
+                session.context_manager.total_usage = snapshot.total_usage
+
+                for msg in snapshot.messages:
+                    if msg.get("role") == "system":
+                        continue
+                    elif msg["role"] == "user":
+                        session.context_manager.add_user_message(msg.get("content", ""))
+                    elif msg["role"] == "assistant":
+                        session.context_manager.add_assistant_message(
+                            msg.get("content", ""), msg.get("tool_calls")
+                        )
+                    elif msg["role"] == "tool":
+                        session.context_manager.add_tool_result(
+                            msg.get("tool_call_id", ""), msg.get("content", "")
+                        )
+
+                agent.session = session
+                console.print(f"[success]Resumed session: {session_id}[/success]")
+
+                # Continue interactive mode
+                await friday_cli.run_interactive()
+
+        asyncio.run(do_resume())
+
+    except Exception as e:
+        console.print(f"[error]Error resuming session: {e}[/error]")
+
+
+# Entry point
 @click.command()
 @click.argument("prompt", required=False)
 @click.option(
@@ -312,32 +854,38 @@ class CLI:
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     help="Current working directory",
 )
-def main(
-    prompt: str | None,
-    cwd: Path | None,
-):
+@click.option(
+    "--version",
+    "-v",
+    is_flag=True,
+    help="Show version information",
+)
+def main(prompt: str | None, cwd: Path | None, version: bool):
+    """Friday AI - Your intelligent coding assistant."""
+    if version:
+        console.print(f"Friday AI Teammate v{__version__}")
+        return
+
     try:
         config = load_config(cwd=cwd)
     except Exception as e:
         console.print(f"[error]Configuration Error: {e}[/error]")
+        sys.exit(1)
 
     errors = config.validate()
-
     if errors:
         for error in errors:
             console.print(f"[error]{error}[/error]")
-
         sys.exit(1)
 
-    cli = CLI(config)
+    cli_instance = CLI(config)
 
-    # messages = [{"role": "user", "content": prompt}]
     if prompt:
-        result = asyncio.run(cli.run_single(prompt))
+        result = asyncio.run(cli_instance.run_single(prompt))
         if result is None:
             sys.exit(1)
     else:
-        asyncio.run(cli.run_interactive())
+        asyncio.run(cli_instance.run_interactive())
 
 
 if __name__ == "__main__":

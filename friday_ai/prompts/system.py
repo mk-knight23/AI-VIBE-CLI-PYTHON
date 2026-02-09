@@ -8,6 +8,7 @@ def get_system_prompt(
     config: Config,
     user_memory: str | None = None,
     tools: list[Tool] | None = None,
+    claude_context: Any | None = None,
 ) -> str:
     parts = []
 
@@ -24,6 +25,18 @@ def get_system_prompt(
 
     # Security guidelines
     parts.append(_get_security_section())
+
+    # .claude folder integration - active skills
+    if claude_context and hasattr(claude_context, 'format_skills_for_prompt'):
+        skills_section = claude_context.format_skills_for_prompt()
+        if skills_section:
+            parts.append(skills_section)
+
+    # .claude folder integration - active rules
+    if claude_context and hasattr(claude_context, 'format_rules_for_prompt'):
+        rules_section = claude_context.format_rules_for_prompt()
+        if rules_section:
+            parts.append(rules_section)
 
     if config.developer_instructions:
         parts.append(_get_developer_instructions_section(config.developer_instructions))

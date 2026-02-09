@@ -6,10 +6,10 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config.config import Config
-from tools.base import ToolInvocation
-from tools.builtin.read_file import ReadFileTool
-from tools.builtin.grep import GrepTool
+from friday_ai.config.config import Config
+from friday_ai.tools.base import ToolInvocation
+from friday_ai.tools.builtin.read_file import ReadFileTool
+from friday_ai.tools.builtin.grep import GrepTool
 
 async def test_secret_scrubbing():
     print("🛡️ Testing secret scrubbing...")

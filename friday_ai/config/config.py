@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class ModelConfig(BaseModel):
-    name: str = "MiniMax-M2.1"
+    name: str = "GLM-4.7"
     temperature: float = Field(default=1, ge=0.0, le=2.0)
     context_window: int = 256_000
 
@@ -105,6 +105,32 @@ class Config(BaseModel):
 
     debug: bool = False
 
+    # .claude folder integration settings
+    claude_dir: Path | None = Field(
+        default=None,
+        description="Path to .claude directory. Auto-discovered if not set."
+    )
+    claude_agents_enabled: bool = Field(
+        default=True,
+        description="Enable loading agents from .claude/agents/"
+    )
+    claude_skills_enabled: bool = Field(
+        default=True,
+        description="Enable loading skills from .claude/skills/"
+    )
+    claude_rules_enabled: bool = Field(
+        default=True,
+        description="Enable loading rules from .claude/rules/"
+    )
+    claude_workflows_enabled: bool = Field(
+        default=True,
+        description="Enable loading workflows from .claude/workflows/"
+    )
+    claude_commands_enabled: bool = Field(
+        default=True,
+        description="Enable loading commands from .claude/commands/"
+    )
+
     @property
     def api_key(self) -> str | None:
         return os.environ.get("API_KEY")
@@ -142,3 +168,18 @@ class Config(BaseModel):
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
+
+    def get_claude_dir(self) -> Path | None:
+        """Get or discover .claude directory.
+
+        Returns:
+            Path to .claude directory if found, None otherwise.
+        """
+        if self.claude_dir:
+            return self.claude_dir
+
+        try:
+            from friday_ai.claude_integration.utils import find_claude_dir
+            return find_claude_dir(self.cwd)
+        except ImportError:
+            return None
