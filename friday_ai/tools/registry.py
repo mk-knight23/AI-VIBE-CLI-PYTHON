@@ -25,6 +25,18 @@ class ToolRegistry:
         if tool.name in self._tools:
             logger.warning(f"Overwriting existing tool: {tool.name}")
 
+        # Validate tool before registration
+        try:
+            from friday_ai.tools.validation import (
+                validate_tool_metadata,
+                validate_tool_schema,
+            )
+            validate_tool_metadata(tool)
+            validate_tool_schema(tool)
+        except Exception as e:
+            logger.error(f"Tool validation failed for {tool.name}: {e}")
+            raise
+
         self._tools[tool.name] = tool
         logger.debug(f"Registered tool: {tool.name}")
 
