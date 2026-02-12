@@ -5,11 +5,43 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from typing import Any
 
 from friday_ai.tools.base import Tool, ToolInvocation, ToolResult
 
 logger = logging.getLogger(__name__)
+
+
+def _is_safe_table_name(name: str) -> bool:
+    """Validate table name is safe from SQL injection.
+
+    Args:
+        name: Table name to validate
+
+    Returns:
+        True if safe, False otherwise
+    """
+    # Allow alphanumeric, underscore, and single dash between alphanumerics
+    # Prevents SQL metacharacters and injection attempts
+    # Pattern: start with alphanumeric, end with alphanumeric
+    # Middle can contain: alphanumeric, underscore, single dash between alphanumerics
+    if not re.match(r"^[a-zA-Z0-9](?:[a-zA-Z0-9_\-]?[a-zA-Z0-9])*$", name):
+        return False
+
+    # Must be 1-64 characters
+    if len(name) < 1 or len(name) > 64:
+        return False
+
+    # Block SQL keywords
+    sql_keywords = {
+        "SELECT", "INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER",
+        "TRUNCATE", "UNION", "OR", "AND", "WHERE", "JOIN", "FROM"
+    }
+    if name.upper() in sql_keywords:
+        return False
+
+    return True
 
 
 class DatabaseTool(Tool):
@@ -126,12 +158,20 @@ class DatabaseTool(Tool):
         if not table:
             return ToolResult.error_result("Table name is required")
 
+        # Validate table name to prevent SQL injection
+        if not self._is_safe_table_name(table):
+            return ToolResult.error_result(
+                f"Invalid table name: {table}",
+                metadata={"error": "Table name contains unsafe characters"}
+            )
+
         db_type, connection = self._get_connection(params.get("database", "default"))
 
         try:
             if db_type == "sqlite":
-                query = f"PRAGMA table_info({table})"
-                return await self._sqlite_query(connection, query)
+                # Use parameterized query for PRAGMA with table name validation
+                query = "PRAGMA table_info(?)"
+                return await self._sqlite_query(connection, query, (table,))
             elif db_type == "postgresql":
                 query = """
                     SELECT column_name, data_type, is_nullable
@@ -141,8 +181,9 @@ class DatabaseTool(Tool):
                 """
                 return await self._postgresql_query(connection, query, (table,))
             elif db_type == "mysql":
-                query = f"DESCRIBE {table}"
-                return await self._mysql_query(connection, query)
+                # Use parameterized query for DESCRIBE with table name validation
+                query = "DESCRIBE ?"
+                return await self._mysql_query(connection, query, (table,))
             else:
                 return ToolResult.error_result(f"Unsupported database type: {db_type}")
         except Exception as e:
