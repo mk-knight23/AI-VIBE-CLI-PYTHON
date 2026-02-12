@@ -180,22 +180,3 @@ exclude_lines = [
 ]
 precision = 2
 
-
-[tool.coverage.run]
-source = ["friday_ai"]
-branch = true
-omit = [
-    "*/tests/*",
-    "*/__pycache__/*",
-    "*/site-packages/*",
-]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
-    "if TYPE_CHECKING:",
-]

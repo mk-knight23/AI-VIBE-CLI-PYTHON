@@ -135,8 +135,7 @@ class ToolRegistry:
             result = ToolResult.error_result(
                 f"Internal error: {str(e)}",
                 metadata={
-                    "tool_name",
-                    name,
+                    "tool_name": name,
                 },
             )
 
