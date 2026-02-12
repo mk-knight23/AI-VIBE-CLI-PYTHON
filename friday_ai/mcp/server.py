@@ -12,10 +12,12 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, AsyncGenerator
+from typing import TYPE_CHECKING, Any, AsyncGenerator
 
-from friday_ai.agent.agent import Agent
 from friday_ai.config.config import Config
+
+if TYPE_CHECKING:
+    from friday_ai.agent.agent import Agent
 
 logger = logging.getLogger(__name__)
 

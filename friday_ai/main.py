@@ -1169,6 +1169,7 @@ def resume(session_id: str | None):
     "--cwd",
     "-c",
     type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=None,
     help="Current working directory",
 )
 @click.option(
@@ -1184,60 +1185,64 @@ def resume(session_id: str | None):
     default=None,
     help="Resume a previous session",
 )
-def _enable_voice(self) -> None:
-    """Enable voice I/O."""
-    if not VOICE_AVAILABLE:
-        console.print("[error]Voice features not available. Install with: pip install -e '.[voice]'[/error]")
-        return
-
-    if self.voice_manager is None:
-        self.voice_manager = VoiceManager()
-
-    self.voice_manager.enable()
-    console.print("[success]Voice input/output enabled[/success]")
-
-def _disable_voice(self) -> None:
-    """Disable voice I/O."""
-    if not VOICE_AVAILABLE or self.voice_manager is None:
-        console.print("[error]Voice features not available[/error]")
-        return
-
-    if self.voice_manager:
-        self.voice_manager.disable()
-        console.print("[success]Voice input/output disabled[/success]")
-
-def _show_voice_status(self) -> None:
-    """Show current voice status."""
-    if not VOICE_AVAILABLE:
-        console.print("[error]Voice features not available. Install with: pip install -e '.[voice]'[/error]")
-        return
-
-    if self.voice_manager is None:
-        console.print("Voice status: Not initialized")
-        return
-
-    status = self.voice_manager.get_status()
-    status_str = status.value if status else "unknown"
-    console.print(f"Voice status: {status_str}")
-
-    if status == VoiceStatus.ENABLED:
-        console.print("  Voice input: Active")
-        console.print("  Voice output: Active")
-    elif status == VoiceStatus.INPUT_ONLY:
-        console.print("  Voice input: Active")
-        console.print("  Voice output: Inactive")
-    elif status == VoiceStatus.OUTPUT_ONLY:
-        console.print("  Voice input: Inactive")
-        console.print("  Voice output: Active")
-    else:
-        console.print("  Voice input: Inactive")
-        console.print("  Voice output: Inactive")
-
-
-def main(prompt: str | None, cwd: Path | None, version: bool):
+def main(prompt: str | None, cwd: Path | None, version: bool, resume: str | None):
     """Friday AI - Your intelligent coding assistant."""
     if version:
         console.print(f"Friday AI Teammate v{__version__}")
+        return
+
+    # Handle resume option
+    if resume:
+        from friday_ai.agent.persistence import PersistenceManager
+        from friday_ai.agent.session import Session
+
+        persistence_manager = PersistenceManager()
+        snapshot = persistence_manager.load_session(resume)
+
+        if not snapshot:
+            console.print(f"[error]Session not found: {resume}[/error]")
+            sys.exit(1)
+
+        try:
+            config = load_config(cwd=cwd)
+        except Exception as e:
+            console.print(f"[error]Configuration Error: {e}[/error]")
+            sys.exit(1)
+
+        cli_instance = CLI(config)
+
+        async def do_resume():
+            from friday_ai.agent.agent import Agent
+
+            async with Agent(config) as agent:
+                cli_instance.agent = agent
+                session = Session(config=config)
+                await session.initialize()
+                session.session_id = snapshot.session_id
+                session.created_at = snapshot.created_at
+                session.updated_at = snapshot.updated_at
+                session.turn_count = snapshot.turn_count
+                session.context_manager.total_usage = snapshot.total_usage
+
+                for msg in snapshot.messages:
+                    if msg.get("role") == "system":
+                        continue
+                    elif msg["role"] == "user":
+                        session.context_manager.add_user_message(msg.get("content", ""))
+                    elif msg["role"] == "assistant":
+                        session.context_manager.add_assistant_message(
+                            msg.get("content", ""), msg.get("tool_calls")
+                        )
+                    elif msg["role"] == "tool":
+                        session.context_manager.add_tool_result(
+                            msg.get("tool_call_id", ""), msg.get("content", "")
+                        )
+
+                agent.session = session
+                console.print(f"[success]Resumed session: {resume}[/success]")
+                await cli_instance.run_interactive()
+
+        asyncio.run(do_resume())
         return
 
     try:
