@@ -706,10 +706,11 @@ class AutonomousLoop:
         """
         self.is_running = True
 
-        # Generate session ID if not present
+        # Generate secure session ID with sufficient entropy
         if not self.session_id:
             import uuid
-            self.session_id = str(uuid.uuid4())[:8]
+            # Use full UUID for security (128-bit entropy)
+            self.session_id = str(uuid.uuid4())
 
         results = {
             "loops_run": 0,
