@@ -4,10 +4,148 @@
 
 **Friday AI Teammate** is a comprehensive, production-ready AI coding assistant CLI tool that provides intelligent code assistance through an event-driven architecture with extensive tool integration, autonomous development capabilities, and full .claude folder support.
 
-**Version:** 1.0.0
-**Status:** Enterprise Grade / Production Ready
+**Version:** 2.1.0
+**Status:** Enterprise Grade / Production Ready with v2.0 Features Integrated
 **License:** MIT
-**Total Codebase:** ~41,299 LOC across 73 Python files, 13 test files, and 20+ documentation files
+**Total Codebase:** ~50,000+ LOC across 150+ Python files, 40+ test files, and 25+ documentation files
+
+---
+
+## v2.1.0 Features
+
+### Multi-Provider LLM Support
+
+**Smart Provider Routing** - Automatic provider selection based on task complexity:
+```bash
+friday
+> /provider list                    # List all providers
+> /provider anthropic                # Switch to Anthropic
+> /provider openai                    # Switch to OpenAI
+> /cost                             # Show cost tracking
+```
+
+**Task Complexity Levels:**
+- `SIMPLE` - Basic Q&A, simple code edits
+- `MODERATE` - Multi-step reasoning, code reviews
+- `COMPLEX` - Architecture decisions, long code generation
+- `EXPERT` - Complex problem solving, research
+
+**Supported Providers:**
+- OpenAI (GPT-4, GPT-3.5)
+- Anthropic (Claude 3, Claude 3.5 Sonnet)
+- Google Gemini (Gemini Pro)
+- Groq (Llama models)
+- Ollama (Local models)
+
+### Advanced Autonomous Mode
+
+**Goal Parser & Tracker:**
+```bash
+> /autonomous "Implement user authentication"
+> /goals                             # Show current goals
+> /goal status <goal_id>          # Check goal progress
+```
+
+**Goal Types:** CODING, REFACTORING, DEBUGGING, TESTING, DOCUMENTATION, RESEARCH, ARCHITECTURE, DEPLOYMENT, ANALYSIS
+
+**Self-Healing:**
+- Syntax error detection and auto-fix
+- Import error resolution
+- Type error handling
+- Dependency missing detection
+
+### Agent Swarm Mode
+
+**Multi-Agent Orchestration:**
+- Hierarchical agents: Architect → Coder → Tester → Reviewer
+- Parallel task execution
+- Load-balanced task distribution
+
+### RAG System (Codebase Intelligence)
+
+**Semantic Code Search:**
+```bash
+> /index ./src                    # Index codebase for RAG
+> /search "UserManager class"       # Semantic search
+> /ask "What does UserManager do?"  # Codebase Q&A
+```
+
+### Voice I/O
+
+**Voice Commands:**
+```bash
+> /voice on                          # Enable voice input/output
+> /voice off                         # Disable voice
+> /voice status                       # Check voice status
+```
+
+**Supported Engines:**
+- Input: Sphinx, Google, Whisper
+- Output: pyttsx3, gTTS
+
+### Kubernetes Integration
+
+**Cluster Management:**
+```bash
+> /k8s pods                         # List all pods
+> /k8s logs <pod>                 # Get pod logs
+> /k8s exec <pod> -- command       # Execute in pod
+> /k8s scale <deployment> <replicas>  # Scale deployment
+```
+
+### Enhanced MCP Ecosystem
+
+**15+ Pre-configured Servers:**
+- `filesystem` - File operations
+- `github` - Repositories, issues, PRs
+- `postgres`, `redis` - Databases
+- `slack` - Messaging
+- `google-maps` - Location services
+- `puppeteer` - Browser automation
+- `brave-search` - Web search
+
+**Quick Install:**
+```bash
+> /mcp install filesystem           # One-click install
+> /mcp list                         # List all servers
+> /mcp search "postgres"           # Search servers
+```
+
+### Skills System v2
+
+**Remote Skill Registry:**
+- Community skill sharing
+- Dependency resolution
+- Version management
+- Search and discovery
+
+```bash
+> /skills list                       # List all skills
+> /skills install <name>            # Install skill
+> /skills update <name>             # Update skill
+```
+
+### Refactored Architecture (v2.1)
+
+**Extracted Components:**
+- `ToolOrchestrator` - Tool management, MCP integration
+- `SafetyManager` - Approval, validation, sanitization
+- `SessionMetrics` - Session statistics and performance
+- `SmartCompactor` - Multi-strategy context compaction
+
+**Compaction Strategies:**
+- `TOKEN_BASED` - Simple token count (legacy)
+- `RELEVANCE` - Score by relevance to current query
+- `RECENCY` - Prioritize recent messages
+- `IMPORTANCE` - Keep tool calls and important messages
+- `SEMANTIC` - Embedding-based similarity (future)
+- `HYBRID` - Weighted combination (default)
+
+**Benefits:**
+- Reduced coupling (composition over inheritance)
+- Clear separation of concerns
+- Easier testing with mock components
+- Better adherence to SOLID principles
 
 ---
 
