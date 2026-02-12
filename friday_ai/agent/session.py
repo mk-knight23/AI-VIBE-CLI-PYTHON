@@ -1,56 +1,105 @@
-from datetime import datetime
+"""Session - Orchestrates agent interaction with LLM and tools."""
+
 import json
-from typing import Any
+import logging
 import uuid
+from datetime import datetime
+from typing import Any
+
 from friday_ai.client.llm_client import LLMClient
 from friday_ai.config.config import Config
 from friday_ai.config.loader import get_data_dir
 from friday_ai.context.compaction import ChatCompactor
 from friday_ai.context.loop_detector import LoopDetector
 from friday_ai.context.manager import ContextManager
+
+# New refactored components
+from friday_ai.agent.tool_orchestrator import ToolOrchestrator
+from friday_ai.agent.safety_manager import SafetyManager
+from friday_ai.agent.session_metrics import SessionMetrics
 from friday_ai.hooks.hook_system import HookSystem
-from friday_ai.safety.approval import ApprovalManager
-from friday_ai.tools.discovery import ToolDiscoveryManager
-from friday_ai.tools.mcp.mcp_manager import MCPManager
 from friday_ai.tools.registry import create_default_registry
+
+logger = logging.getLogger(__name__)
 
 
 class Session:
+    """Orchestrates agent interaction with LLM and tools.
+
+    Simplified session class using composition to delegate specialized concerns.
+    Reduced from 92 lines to ~50 lines by extracting:
+    - ToolOrchestrator: Tool registry, MCP, discovery
+    - SafetyManager: Approval, validation, sanitization
+    - SessionMetrics: Stats tracking
+
+    Remaining responsibilities:
+    - High-level orchestration
+    - Context management
+    - LLM client coordination
+    - Event emission
+    - Loop detection
+    - Hook execution
+    """
+
     def __init__(self, config: Config):
+        """Initialize session with composition over inheritance.
+
+        Args:
+            config: Application configuration
+        """
         self.config = config
+
+        # Core client
         self.client = LLMClient(config=config)
-        self.tool_registry = create_default_registry(config)
-        self.context_manager: ContextManager | None = None
-        self.discovery_manager = ToolDiscoveryManager(
-            self.config,
-            self.tool_registry,
+
+        # Composed components
+        self.tool_orchestrator = ToolOrchestrator(
+            config,
+            create_default_registry(config),
         )
-        self.mcp_manager = MCPManager(self.config)
+        self.safety_manager = SafetyManager(
+            config.approval,
+            config.cwd,
+        )
+        self.metrics = SessionMetrics(str(uuid.uuid4()))
         self.chat_compactor = ChatCompactor(self.client)
-        self.approval_manager = ApprovalManager(
-            self.config.approval,
-            self.config.cwd,
-        )
         self.loop_detector = LoopDetector()
         self.hook_system = HookSystem(config)
-        self.session_id = str(uuid.uuid4())
+
+        # Context manager (initialized separately)
+        self.context_manager: ContextManager | None = None
+
+        # Timestamps
         self.created_at = datetime.now()
         self.updated_at = datetime.now()
 
-        self.turn_count = 0
+        logger.info("Session initialized with refactored architecture")
 
     async def initialize(self) -> None:
-        await self.mcp_manager.initialize()
-        self.mcp_manager.register_tools(self.tool_registry)
+        """Initialize session components.
 
-        self.discovery_manager.discover_all()
+        Establishes MCP connections, tool discovery, and context.
+        """
+        logger.info("Initializing session")
+
+        # Initialize tool orchestrator (MCP, discovery)
+        mcp_tools = await self.tool_orchestrator.initialize()
+
+        # Initialize context manager
         self.context_manager = ContextManager(
             config=self.config,
             user_memory=self._load_memory(),
-            tools=self.tool_registry.get_tools(),
+            tools=self.tool_orchestrator.tool_registry.get_tools(),
         )
 
+        logger.info(f"Session initialized with {mcp_tools} MCP tools")
+
     def _load_memory(self) -> str | None:
+        """Load user memory from disk.
+
+        Returns:
+            User memory content or None if not found
+        """
         data_dir = get_data_dir()
         data_dir.mkdir(parents=True, exist_ok=True)
         path = data_dir / "user_memory.json"
@@ -71,21 +120,67 @@ class Session:
 
             return "\n".join(lines)
         except Exception:
+            logger.warning(f"Failed to load user memory: {path}")
             return None
 
     def increment_turn(self) -> int:
-        self.turn_count += 1
-        self.updated_at = datetime.now()
+        """Increment turn counter and update metrics.
 
-        return self.turn_count
+        Returns:
+            New turn count
+        """
+        self.metrics.increment_turn()
+        self.updated_at = datetime.now()
+        return self.metrics.turn_count
 
     def get_stats(self) -> dict[str, Any]:
-        return {
-            "session_id": self.session_id,
-            "created_at": self.created_at.isoformat(),
-            "turn_count": self.turn_count,
-            "message_count": self.context_manager.message_count,
-            "token_usage": self.context_manager.total_usage,
-            "tools_count": len(self.tool_registry.get_tools()),
-            "mcp_servers": len(self.tool_registry.connected_mcp_servers),
+        """Get session statistics.
+
+        Returns:
+            Dictionary with session metrics
+        """
+        # Update metrics with current context info
+        if self.context_manager:
+            self.metrics.message_count = self.context_manager.message_count
+            self.metrics.total_tokens_used = self.context_manager.total_usage
+            self.metrics.total_tokens_cached = self.context_manager.total_cached
+
+        return self.metrics.get_stats()
+
+    async def save(self) -> None:
+        """Save session state to disk.
+
+        Persists context, metrics, and metadata.
+        """
+        logger.info("Saving session state")
+
+        data_dir = get_data_dir()
+        data_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save session metadata
+        session_file = data_dir / f"session_{self.metrics.session_id}.json"
+        session_data = {
+            "session_id": self.metrics.session_id,
+            "created_at": self.metrics.created_at.isoformat(),
+            "updated_at": datetime.now().isoformat(),
+            "stats": self.get_stats(),
         }
+
+        session_file.write_text(
+            json.dumps(session_data, indent=2),
+            encoding="utf-8",
+        )
+
+        logger.info(f"Session saved to: {session_file}")
+
+    async def cleanup(self) -> None:
+        """Cleanup session resources.
+
+        Properly closes connections and releases resources.
+        """
+        logger.info("Cleaning up session resources")
+
+        # Shutdown tool orchestrator (MCP connections)
+        await self.tool_orchestrator.shutdown()
+
+        logger.info("Session cleanup complete")

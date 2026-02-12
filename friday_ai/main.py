@@ -21,6 +21,15 @@ from friday_ai.config.config import ApprovalPolicy, Config
 from friday_ai.config.loader import load_config, get_data_dir
 from friday_ai.ui.tui import TUI, get_console
 
+# Voice imports (lazy load)
+try:
+    from friday_ai.ui.voice import VoiceManager, VoiceStatus
+    VOICE_AVAILABLE = True
+except ImportError:
+    VOICE_AVAILABLE = False
+    VoiceManager = None  # type: ignore
+    VoiceStatus = None  # type: ignore
+
 console = get_console()
 
 # Version information
@@ -35,6 +44,8 @@ class CLI:
         self._claude_context: Any | None = None
         self._command_mapper: Any | None = None
         self._workflow_engine: Any | None = None
+        self.voice_manager: VoiceManager | None = None
+        self.voice_enabled = False
 
     def _init_claude_integration(self) -> None:
         """Initialize .claude folder integration if enabled."""
@@ -242,6 +253,20 @@ class CLI:
             console.print("\n[bold]Session Statistics [/bold]")
             for key, value in stats.items():
                 console.print(f"   {key}: {value}")
+        elif cmd_name == "/voice":
+            # Voice commands
+            if cmd_args:
+                if cmd_args == "on":
+                    self._enable_voice()
+                elif cmd_args == "off":
+                    self._disable_voice()
+                elif cmd_args == "status":
+                    self._show_voice_status()
+                else:
+                    console.print(f"[error]Invalid voice command: {cmd_args} [/error]")
+                    console.print("Usage: /voice [on|off|status]")
+            else:
+                self._show_voice_status()
         elif cmd_name == "/tools":
             tools = self.agent.session.tool_registry.get_tools()
             console.print(f"\n[bold]Available tools ({len(tools)}) [/bold]")
@@ -1152,6 +1177,63 @@ def resume(session_id: str | None):
     is_flag=True,
     help="Show version information",
 )
+@click.option(
+    "--resume",
+    "-r",
+    type=str,
+    default=None,
+    help="Resume a previous session",
+)
+def _enable_voice(self) -> None:
+    """Enable voice I/O."""
+    if not VOICE_AVAILABLE:
+        console.print("[error]Voice features not available. Install with: pip install -e '.[voice]'[/error]")
+        return
+
+    if self.voice_manager is None:
+        self.voice_manager = VoiceManager()
+
+    self.voice_manager.enable()
+    console.print("[success]Voice input/output enabled[/success]")
+
+def _disable_voice(self) -> None:
+    """Disable voice I/O."""
+    if not VOICE_AVAILABLE or self.voice_manager is None:
+        console.print("[error]Voice features not available[/error]")
+        return
+
+    if self.voice_manager:
+        self.voice_manager.disable()
+        console.print("[success]Voice input/output disabled[/success]")
+
+def _show_voice_status(self) -> None:
+    """Show current voice status."""
+    if not VOICE_AVAILABLE:
+        console.print("[error]Voice features not available. Install with: pip install -e '.[voice]'[/error]")
+        return
+
+    if self.voice_manager is None:
+        console.print("Voice status: Not initialized")
+        return
+
+    status = self.voice_manager.get_status()
+    status_str = status.value if status else "unknown"
+    console.print(f"Voice status: {status_str}")
+
+    if status == VoiceStatus.ENABLED:
+        console.print("  Voice input: Active")
+        console.print("  Voice output: Active")
+    elif status == VoiceStatus.INPUT_ONLY:
+        console.print("  Voice input: Active")
+        console.print("  Voice output: Inactive")
+    elif status == VoiceStatus.OUTPUT_ONLY:
+        console.print("  Voice input: Inactive")
+        console.print("  Voice output: Active")
+    else:
+        console.print("  Voice input: Inactive")
+        console.print("  Voice output: Inactive")
+
+
 def main(prompt: str | None, cwd: Path | None, version: bool):
     """Friday AI - Your intelligent coding assistant."""
     if version:
