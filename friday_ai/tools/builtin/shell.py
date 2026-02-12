@@ -2,10 +2,10 @@ import asyncio
 import os
 from pathlib import Path
 import signal
+import shlex
 import sys
 from friday_ai.tools.base import Tool, ToolConfirmation, ToolInvocation, ToolKind, ToolResult
 from pydantic import BaseModel, Field
-import fnmatch
 
 BLOCKED_COMMANDS = {
     "rm -rf /",
