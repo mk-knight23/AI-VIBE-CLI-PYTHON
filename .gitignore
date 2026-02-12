@@ -47,4 +47,4 @@ database.db
 *.db
 
 # Session files
-.session_id
+.session_id.friday/

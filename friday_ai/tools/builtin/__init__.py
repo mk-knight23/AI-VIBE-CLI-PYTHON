@@ -9,6 +9,7 @@ from friday_ai.tools.builtin.list_dir import ListDirTool
 from friday_ai.tools.builtin.memory import MemoryTool
 from friday_ai.tools.builtin.read_file import ReadFileTool
 from friday_ai.tools.builtin.shell import ShellTool
+from friday_ai.tools.builtin.security_audit import SecurityAuditLogTool
 from friday_ai.tools.builtin.todo import TodosTool
 from friday_ai.tools.builtin.web_fetch import WebFetchTool
 from friday_ai.tools.builtin.web_search import WebSearchTool
@@ -31,6 +32,7 @@ __all__ = [
     "HttpDownloadTool",
     "DockerTool",
     "DatabaseTool",
+        "SecurityAuditLogTool",
 ]
 
 
