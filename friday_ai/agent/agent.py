@@ -17,7 +17,7 @@ class Agent:
     ):
         self.config = config
         self.session: Session | None = Session(self.config)
-        self.session.approval_manager.confirmation_callback = confirmation_callback
+        self.session.safety_manager.confirmation_callback = confirmation_callback
 
     async def run(self, message: str):
         await self.session.hook_system.trigger_before_agent(message)
