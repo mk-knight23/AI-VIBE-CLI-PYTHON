@@ -95,7 +95,7 @@ class ToolOrchestrator:
         """
         logger.info("Shutting down tool orchestrator")
 
-        # MCP manager cleanup is handled by MCPManager itself
-        # No explicit cleanup needed for ToolDiscoveryManager
+        # Shutdown MCP manager (closes all server connections)
+        await self.mcp_manager.shutdown()
 
         logger.info("Tool orchestrator shutdown complete")

@@ -110,13 +110,10 @@ class Tool(abc.ABC):
     name: str = "base_tool"
     description: str = "Base tool"
     kind: ToolKind = ToolKind.READ
+    schema: dict[str, Any] | type["BaseModel"] | None = None
 
     def __init__(self, config: Config) -> None:
         self.config = config
-
-    @property
-    def schema(self) -> dict[str, Any] | type["BaseModel"]:
-        raise NotImplementedError("Tool must define schema property or class attribute")
 
     @abc.abstractmethod
     async def execute(self, invocation: ToolInvocation) -> ToolResult:

@@ -329,6 +329,7 @@ class CLI:
         elif cmd_name == "/save":
             if self.agent and self.agent.session:
                 from friday_ai.agent.persistence import PersistenceManager, SessionSnapshot
+                from friday_ai.client.response import TokenUsage
 
                 persistence_manager = PersistenceManager()
                 session_snapshot = SessionSnapshot(
@@ -344,7 +345,7 @@ class CLI:
                     total_usage=(
                         self.agent.session.context_manager.total_usage
                         if self.agent.session.context_manager
-                        else {}
+                        else TokenUsage()
                     ),
                 )
                 await persistence_manager.save_session(session_snapshot)
@@ -377,35 +378,39 @@ class CLI:
                         config=self.config,
                     )
                     await session.initialize()
-                    session.session_id = snapshot.session_id
+                    session.metrics.session_id = snapshot.session_id
                     session.created_at = snapshot.created_at
                     session.updated_at = snapshot.updated_at
-                    session.turn_count = snapshot.turn_count
-                    session.context_manager.total_usage = snapshot.total_usage
+                    session.metrics.turn_count = snapshot.turn_count
+                    if session.context_manager:
+                        session.context_manager.total_usage = snapshot.total_usage
 
-                    for msg in snapshot.messages:
-                        if msg.get("role") == "system":
-                            continue
-                        elif msg["role"] == "user":
-                            session.context_manager.add_user_message(msg.get("content", ""))
-                        elif msg["role"] == "assistant":
-                            session.context_manager.add_assistant_message(
-                                msg.get("content", ""), msg.get("tool_calls")
-                            )
-                        elif msg["role"] == "tool":
-                            session.context_manager.add_tool_result(
-                                msg.get("tool_call_id", ""), msg.get("content", "")
-                            )
+                        for msg in snapshot.messages:
+                            if msg.get("role") == "system":
+                                continue
+                            elif msg["role"] == "user":
+                                session.context_manager.add_user_message(msg.get("content", ""))
+                            elif msg["role"] == "assistant":
+                                session.context_manager.add_assistant_message(
+                                    msg.get("content", ""), msg.get("tool_calls")
+                                )
+                            elif msg["role"] == "tool":
+                                session.context_manager.add_tool_result(
+                                    msg.get("tool_call_id", ""), msg.get("content", "")
+                                )
 
-                    await self.agent.session.cleanup()
+                    if self.agent and self.agent.session:
+                        await self.agent.session.cleanup()
 
-                    self.agent.session = session
+                    if self.agent:
+                        self.agent.session = session
                     console.print(
                         f"[success]Resumed session: {session.metrics.session_id}[/success]"
                     )
         elif cmd_name == "/checkpoint":
             if self.agent and self.agent.session:
                 from friday_ai.agent.persistence import PersistenceManager, SessionSnapshot
+                from friday_ai.client.response import TokenUsage
 
                 persistence_manager = PersistenceManager()
                 session_snapshot = SessionSnapshot(
@@ -421,7 +426,7 @@ class CLI:
                     total_usage=(
                         self.agent.session.context_manager.total_usage
                         if self.agent.session.context_manager
-                        else {}
+                        else TokenUsage()
                     ),
                 )
                 checkpoint_id = await persistence_manager.save_checkpoint(session_snapshot)
@@ -442,29 +447,32 @@ class CLI:
                         config=self.config,
                     )
                     await session.initialize()
-                    session.session_id = snapshot.session_id
+                    session.metrics.session_id = snapshot.session_id
                     session.created_at = snapshot.created_at
                     session.updated_at = snapshot.updated_at
-                    session.turn_count = snapshot.turn_count
-                    session.context_manager.total_usage = snapshot.total_usage
+                    session.metrics.turn_count = snapshot.turn_count
+                    if session.context_manager:
+                        session.context_manager.total_usage = snapshot.total_usage
 
-                    for msg in snapshot.messages:
-                        if msg.get("role") == "system":
-                            continue
-                        elif msg["role"] == "user":
-                            session.context_manager.add_user_message(msg.get("content", ""))
-                        elif msg["role"] == "assistant":
-                            session.context_manager.add_assistant_message(
-                                msg.get("content", ""), msg.get("tool_calls")
-                            )
-                        elif msg["role"] == "tool":
-                            session.context_manager.add_tool_result(
-                                msg.get("tool_call_id", ""), msg.get("content", "")
-                            )
+                        for msg in snapshot.messages:
+                            if msg.get("role") == "system":
+                                continue
+                            elif msg["role"] == "user":
+                                session.context_manager.add_user_message(msg.get("content", ""))
+                            elif msg["role"] == "assistant":
+                                session.context_manager.add_assistant_message(
+                                    msg.get("content", ""), msg.get("tool_calls")
+                                )
+                            elif msg["role"] == "tool":
+                                session.context_manager.add_tool_result(
+                                    msg.get("tool_call_id", ""), msg.get("content", "")
+                                )
 
-                    await self.agent.session.cleanup()
+                    if self.agent and self.agent.session:
+                        await self.agent.session.cleanup()
 
-                    self.agent.session = session
+                    if self.agent:
+                        self.agent.session = session
                     console.print(
                         f"[success]Restored session: {session.metrics.session_id}, checkpoint: {cmd_args}[/success]"
                     )
@@ -1027,11 +1035,14 @@ def cli(
     # Handle subcommands
     if ctx.invoked_subcommand is None:
         # No subcommand, run main logic
+        config = None
         try:
             config = load_config(cwd=cwd)
         except Exception as e:
             console.print(f"[error]Configuration Error: {e}[/error]")
             ctx.exit(1)
+
+        assert config is not None
 
         # Override config with CLI options
         if approval:
@@ -1232,7 +1243,7 @@ def resume(session_id: str | None):
 
     # Resume the session
     try:
-        config = load_config()
+        config = load_config(cwd=None)
         friday_cli = CLI(config)
 
         async def do_resume():
@@ -1249,25 +1260,26 @@ def resume(session_id: str | None):
                 # Restore session state
                 session = Session(config=config)
                 await session.initialize()
-                session.session_id = snapshot.session_id
+                session.metrics.session_id = snapshot.session_id
                 session.created_at = snapshot.created_at
                 session.updated_at = snapshot.updated_at
-                session.turn_count = snapshot.turn_count
-                session.context_manager.total_usage = snapshot.total_usage
+                session.metrics.turn_count = snapshot.turn_count
+                if session.context_manager:
+                    session.context_manager.total_usage = snapshot.total_usage
 
-                for msg in snapshot.messages:
-                    if msg.get("role") == "system":
-                        continue
-                    elif msg["role"] == "user":
-                        session.context_manager.add_user_message(msg.get("content", ""))
-                    elif msg["role"] == "assistant":
-                        session.context_manager.add_assistant_message(
-                            msg.get("content", ""), msg.get("tool_calls")
-                        )
-                    elif msg["role"] == "tool":
-                        session.context_manager.add_tool_result(
-                            msg.get("tool_call_id", ""), msg.get("content", "")
-                        )
+                    for msg in snapshot.messages:
+                        if msg.get("role") == "system":
+                            continue
+                        elif msg["role"] == "user":
+                            session.context_manager.add_user_message(msg.get("content", ""))
+                        elif msg["role"] == "assistant":
+                            session.context_manager.add_assistant_message(
+                                msg.get("content", ""), msg.get("tool_calls")
+                            )
+                        elif msg["role"] == "tool":
+                            session.context_manager.add_tool_result(
+                                msg.get("tool_call_id", ""), msg.get("content", "")
+                            )
 
                 agent.session = session
                 console.print(f"[success]Resumed session: {session_id}[/success]")
@@ -1351,25 +1363,26 @@ def main(
                 cli_instance.agent = agent
                 session = Session(config=config)
                 await session.initialize()
-                session.session_id = snapshot.session_id
+                session.metrics.session_id = snapshot.session_id
                 session.created_at = snapshot.created_at
                 session.updated_at = snapshot.updated_at
-                session.turn_count = snapshot.turn_count
-                session.context_manager.total_usage = snapshot.total_usage
+                session.metrics.turn_count = snapshot.turn_count
+                if session.context_manager:
+                    session.context_manager.total_usage = snapshot.total_usage
 
-                for msg in snapshot.messages:
-                    if msg.get("role") == "system":
-                        continue
-                    elif msg["role"] == "user":
-                        session.context_manager.add_user_message(msg.get("content", ""))
-                    elif msg["role"] == "assistant":
-                        session.context_manager.add_assistant_message(
-                            msg.get("content", ""), msg.get("tool_calls")
-                        )
-                    elif msg["role"] == "tool":
-                        session.context_manager.add_tool_result(
-                            msg.get("tool_call_id", ""), msg.get("content", "")
-                        )
+                    for msg in snapshot.messages:
+                        if msg.get("role") == "system":
+                            continue
+                        elif msg["role"] == "user":
+                            session.context_manager.add_user_message(msg.get("content", ""))
+                        elif msg["role"] == "assistant":
+                            session.context_manager.add_assistant_message(
+                                msg.get("content", ""), msg.get("tool_calls")
+                            )
+                        elif msg["role"] == "tool":
+                            session.context_manager.add_tool_result(
+                                msg.get("tool_call_id", ""), msg.get("content", "")
+                            )
 
                 agent.session = session
                 console.print(f"[success]Resumed session: {resume}[/success]")

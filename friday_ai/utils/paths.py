@@ -8,21 +8,21 @@ import re
 from pathlib import Path
 
 # FIX-013: Valid filename pattern (alphanumeric, hyphens, underscores, dots)
-_VALID_NAME_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]*$')
+_VALID_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$")
 
 # Binary file signatures (magic bytes)
 _BINARY_SIGNATURES = [
-    b'\x00',  # Null byte
-    b'\xff\xfe',  # UTF-16 LE
-    b'\xfe\xff',  # UTF-16 BE
-    b'\xff\xfb',  # JPEG
-    b'\x89PNG',  # PNG
-    b'GIF8',  # GIF
-    b'PK\x03\x04',  # ZIP
-    b'\x1f\x8b',  # GZIP
-    b'ELF',  # ELF executable
-    b'\xca\xfe\xba\xbe',  # Mach-O binary
-    b'MZ',  # Windows executable
+    b"\x00",  # Null byte
+    b"\xff\xfe",  # UTF-16 LE
+    b"\xfe\xff",  # UTF-16 BE
+    b"\xff\xfb",  # JPEG
+    b"\x89PNG",  # PNG
+    b"GIF8",  # GIF
+    b"PK\x03\x04",  # ZIP
+    b"\x1f\x8b",  # GZIP
+    b"ELF",  # ELF executable
+    b"\xca\xfe\xba\xbe",  # Mach-O binary
+    b"MZ",  # Windows executable
 ]
 
 
@@ -45,7 +45,7 @@ def is_binary_file(path: str | Path) -> bool:
             return False
 
         # Read first 8KB for checking
-        with open(path_obj, 'rb') as f:
+        with open(path_obj, "rb") as f:
             chunk = f.read(8192)
 
         if not chunk:
@@ -57,11 +57,11 @@ def is_binary_file(path: str | Path) -> bool:
                 return True
 
         # Check for null bytes (strong indicator of binary)
-        if b'\x00' in chunk:
+        if b"\x00" in chunk:
             return True
 
         # Check if content is mostly text (high ratio of printable characters)
-        text_characters = bytearray({7, 8, 9, 10, 12, 13, 27} | set(range(0x20, 0x100)) - {0x7f})
+        text_characters = bytearray({7, 8, 9, 10, 12, 13, 27} | set(range(0x20, 0x100)) - {0x7F})
         non_text = chunk.translate(None, text_characters)
         return len(non_text) / len(chunk) > 0.3 if chunk else False
 
@@ -93,10 +93,10 @@ def _validate_filename(name: str) -> bool:
     if not name or len(name) > 255:
         return False
     # Reject path separators and null bytes
-    if '/' in name or '\\' in name or '\x00' in name:
+    if "/" in name or "\\" in name or "\x00" in name:
         return False
     # Check for directory traversal attempts
-    if name in ('..', '.'):
+    if name in ("..", "."):
         return False
     return bool(_VALID_NAME_PATTERN.match(name))
 
@@ -137,10 +137,7 @@ def resolve_path(base: str | Path, path: str | Path) -> Path:
 
     # FIX-013: Reject absolute paths entirely
     if target.is_absolute():
-        raise ValueError(
-            f"Absolute paths not allowed: {path}. "
-            f"Use relative paths only."
-        )
+        raise ValueError(f"Absolute paths not allowed: {path}. Use relative paths only.")
 
     # FIX-013: Check for symlinks in path components
     for part in target.parts:
@@ -237,3 +234,26 @@ def is_safe_path(path: Path, base: Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+def display_path_rel_to_cwd(path: str | Path, cwd: str | Path | None = None) -> Path:
+    """Display path relative to current working directory.
+
+    Args:
+        path: Path to display
+        cwd: Current working directory (defaults to os.getcwd())
+
+    Returns:
+        Path relative to cwd if possible, otherwise absolute path
+    """
+    path_obj = Path(path)
+    if cwd is None:
+        cwd = Path.cwd()
+    else:
+        cwd = Path(cwd)
+
+    try:
+        return path_obj.relative_to(cwd)
+    except ValueError:
+        # Path is not relative to cwd, return as-is
+        return path_obj

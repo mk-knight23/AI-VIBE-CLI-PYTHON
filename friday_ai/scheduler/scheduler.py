@@ -6,16 +6,16 @@ Provides scheduled execution of tasks and utilities.
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Optional, TYPE_CHECKING, Awaitable, Coroutine
+from typing import TYPE_CHECKING, Any
 
 from friday_ai.config.config import Config
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from collections.abc import Coroutine, Callable, Awaitable
+    from collections.abc import Awaitable, Callable, Coroutine
 else:
-    from collections.abc import Callable, Awaitable
+    from collections.abc import Awaitable, Callable
 
 TaskCallback = Callable[..., Awaitable[Any]]
 Coroutine = TaskCallback
@@ -31,7 +31,7 @@ class ScheduledTask:
         schedule_time: datetime,
         args: tuple[Any, ...] = (),
         periodic: bool = False,
-        period: Optional[timedelta] = None,
+        period: timedelta | None = None,
     ):
         """Initialize scheduled task.
 
@@ -49,11 +49,10 @@ class ScheduledTask:
         self.args = args
         self.periodic = periodic
         self.period = period
-        self.task: Optional[asyncio.Task] = None
+        self.task: asyncio.Task | None = None
 
-        if periodic and period:
-            if not period:
-                raise ValueError("Period required for periodic tasks")
+        if periodic and not period:
+            raise ValueError("Period required for periodic tasks")
 
     async def run(self) -> Any:
         """Run the scheduled task."""
@@ -97,8 +96,8 @@ class Scheduler:
         logger.info("Scheduler started")
 
         try:
-            while self.running and self.tasks:
-                now = datetime.now()
+            while self.running:
+                now = datetime.now(timezone.utc)
 
                 # Find due tasks
                 due_tasks = [t for t in self.tasks if t.schedule_time <= now]

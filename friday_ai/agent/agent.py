@@ -138,7 +138,11 @@ class Agent:
             for tool_call in tool_calls:
                 from friday_ai.client.response import parse_tool_call_arguments
 
-                args = parse_tool_call_arguments(tool_call.arguments)
+                arguments = tool_call.arguments
+                if isinstance(arguments, dict):
+                    args = arguments
+                else:
+                    args = parse_tool_call_arguments(arguments)
                 tool_name = tool_call.name or "unknown"
 
                 yield AgentEvent.tool_call_start(
