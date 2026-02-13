@@ -12,8 +12,11 @@ API_KEY = "Bearer friday_test_key_12345"
 
 
 @pytest.fixture
-def app():
+def app(monkeypatch):
     """Create app with mocked state."""
+    # Set test API key
+    monkeypatch.setenv("FRIDAY_TEST_API_KEY", "friday_test_key_12345")
+
     app = create_app()
     app.state.api_key_manager = APIKeyManager(redis_backend=None)
     app.state.redis_backend = None

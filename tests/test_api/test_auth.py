@@ -10,8 +10,11 @@ from friday_ai.auth.api_keys import APIKeyManager
 
 
 @pytest.fixture
-def app():
+def app(monkeypatch):
     """Create app with mocked state."""
+    # Set test API key
+    monkeypatch.setenv("FRIDAY_TEST_API_KEY", "friday_test_key_12345")
+
     app = create_app()
     # Mock state (bypass lifespan)
     app.state.api_key_manager = APIKeyManager(redis_backend=None)

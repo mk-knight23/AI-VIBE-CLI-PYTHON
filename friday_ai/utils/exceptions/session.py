@@ -5,17 +5,21 @@ from .base import FridayError
 class SessionError(FridayError):
     """Session management errors."""
 
-    def __init__(self, message: str, session_id: str | None = None, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        message: str,
+        session_id: str | None = None,
+        code: str = "SESSION_ERROR",
+        **kwargs: Any,
+    ) -> None:
         details = kwargs.pop("details", {}) or {}
         if session_id:
             details["session_id"] = session_id
 
-        # Prevent collision if 'code' is passed in kwargs
+        # Prevent collision if 'code' is passed in kwargs (though explicit arg takes precedence)
         kwargs.pop("code", None)
 
-        super().__init__(
-            message=message, code="SESSION_ERROR", details=details, retryable=False, **kwargs
-        )
+        super().__init__(message=message, code=code, details=details, retryable=False, **kwargs)
         self.session_id = session_id
 
 

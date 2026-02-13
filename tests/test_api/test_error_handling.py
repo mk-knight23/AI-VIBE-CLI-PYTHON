@@ -152,6 +152,7 @@ class TestExceptionHandlerIntegration:
         @app.get("/test/http-error")
         async def test_http_error():
             from fastapi import HTTPException
+
             raise HTTPException(status_code=404, detail="Not found")
 
         @app.get("/test/generic-error")
@@ -163,7 +164,8 @@ class TestExceptionHandlerIntegration:
     @pytest.fixture
     def client(self, app):
         """Create test client."""
-        return TestClient(app)
+        # raise_server_exceptions=False allows testing 500 error handlers
+        return TestClient(app, raise_server_exceptions=False)
 
     def test_friday_error_handler(self, client):
         """Test FridayError is handled with consistent format."""
@@ -220,7 +222,8 @@ class TestRouterErrorHandling:
 
     def test_session_not_found_error(self):
         """Test session router uses FridayError."""
-        from friday_ai.api.routers.sessions import router
+        from friday_ai.api.routers.sessions import router, get_session_service
+        from friday_ai.api.dependencies import get_current_user, check_rate_limit
         from fastapi.testclient import TestClient
         from fastapi import FastAPI
 
@@ -238,20 +241,20 @@ class TestRouterErrorHandling:
         async def mock_service():
             from friday_ai.api.services.session_service import SessionService
             from unittest.mock import AsyncMock
+
             service = Mock(spec=SessionService)
             service.get_session = AsyncMock(return_value=None)
             return service
 
-        app.dependency_overrides[mock_user] = mock_user
-        app.dependency_overrides[mock_rate_limit] = mock_rate_limit
-        app.dependency_overrides[mock_service] = mock_service
+        app.dependency_overrides[get_current_user] = mock_user
+        app.dependency_overrides[check_rate_limit] = mock_rate_limit
+        app.dependency_overrides[get_session_service] = mock_service
 
-        client = TestClient(app)
+        client = TestClient(app, raise_server_exceptions=False)
 
         # This should raise SessionNotFoundError which gets converted
         response = client.get(
-            "/api/v2/sessions/abc123",
-            headers={"Authorization": "Bearer test-key"}
+            "/api/v2/sessions/abc123", headers={"Authorization": "Bearer test-key"}
         )
 
         # Should return 404 with consistent error format
