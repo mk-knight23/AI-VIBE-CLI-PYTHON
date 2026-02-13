@@ -90,6 +90,7 @@ class ConnectionPool:
         self._stats = PoolStats(max_connections=max_size)
         self._closed = False
         self._health_check_task: asyncio.Task | None = None
+        self._lock = asyncio.Lock()  # FIX-006: Lock for thread-safe stats updates
 
     async def initialize(self) -> None:
         """Initialize the pool with minimum connections."""
@@ -99,8 +100,9 @@ class ConnectionPool:
             try:
                 conn = await self._create_connection()
                 await self._pool.put(conn)
-                self._stats.total_connections += 1
-                self._stats.idle_connections += 1
+                async with self._lock:
+                    self._stats.total_connections += 1
+                    self._stats.idle_connections += 1
             except Exception as e:
                 logger.error(f"Failed to create initial connection: {e}")
                 raise DatabaseError(
@@ -128,27 +130,51 @@ class ConnectionPool:
                 if self._closed:
                     break
 
-                # Check idle connections
-                healthy = []
+                # FIX-076: Batch health check using asyncio.gather() to avoid N+1 query pattern
+                # Collect all idle connections first
+                connections_to_check = []
                 while not self._pool.empty():
-                    conn = await self._pool.get()
-                    if await self._is_healthy(conn):
-                        healthy.append(conn)
-                    else:
-                        await self._close_connection(conn)
-                        self._stats.total_connections -= 1
-                        self._stats.idle_connections -= 1
+                    try:
+                        conn = self._pool.get_nowait()
+                        connections_to_check.append(conn)
+                    except asyncio.QueueEmpty:
+                        break
 
-                for conn in healthy:
-                    await self._pool.put(conn)
+                # Check health in parallel using asyncio.gather()
+                if connections_to_check:
+                    health_results = await asyncio.gather(
+                        *[self._is_healthy(conn) for conn in connections_to_check],
+                        return_exceptions=True
+                    )
+
+                    # Separate healthy from unhealthy connections
+                    healthy = []
+                    for conn, is_healthy_result in zip(connections_to_check, health_results):
+                        # Handle exceptions from health checks
+                        if isinstance(is_healthy_result, Exception):
+                            logger.debug(f"Health check failed with exception: {is_healthy_result}")
+                            is_healthy_result = False
+
+                        if is_healthy_result:
+                            healthy.append(conn)
+                        else:
+                            await self._close_connection(conn)
+                            async with self._lock:
+                                self._stats.total_connections -= 1
+                                self._stats.idle_connections -= 1
+
+                    # Return healthy connections to pool
+                    for conn in healthy:
+                        await self._pool.put(conn)
 
                 # Replenish to min_size
                 while self._stats.total_connections < self.min_size:
                     try:
                         conn = await self._create_connection()
                         await self._pool.put(conn)
-                        self._stats.total_connections += 1
-                        self._stats.idle_connections += 1
+                        async with self._lock:
+                            self._stats.total_connections += 1
+                            self._stats.idle_connections += 1
                     except Exception as e:
                         logger.warning(f"Failed to replenish connection: {e}")
                         break
@@ -190,16 +216,24 @@ class ConnectionPool:
 
         start_wait = time.time()
 
-        # Try to acquire from pool without blocking
-        if not self._pool.empty():
-            conn = await self._pool.get()
-            self._stats.idle_connections -= 1
-            self._stats.wait_time_ms += (time.time() - start_wait) * 1000
+        # FIX-026: Try to acquire from pool without blocking
+        # Check pool emptiness and get connection atomically
+        try:
+            conn = self._pool.get_nowait()
+            async with self._lock:
+                self._stats.idle_connections -= 1
+                self._stats.wait_time_ms += (time.time() - start_wait) * 1000
             return ConnectionContext(self, conn)
+        except asyncio.QueueEmpty:
+            pass  # Pool is empty, continue to semaphore
 
-        # Wait for semaphore and create/get connection
-        acquired = await self._semaphore.acquire()
-        if not acquired:
+        # Wait for semaphore with timeout
+        try:
+            await asyncio.wait_for(
+                self._semaphore.acquire(),
+                timeout=self.connection_timeout
+            )
+        except asyncio.TimeoutError:
             raise ResourceExhaustedError(
                 "Connection pool exhausted",
                 resource_type="database_connections",
@@ -208,15 +242,21 @@ class ConnectionPool:
             )
 
         try:
-            if not self._pool.empty():
-                conn = await self._pool.get()
-            else:
+            # Try pool again after acquiring semaphore
+            try:
+                conn = self._pool.get_nowait()
+                async with self._lock:
+                    self._stats.idle_connections -= 1
+                    self._stats.wait_time_ms += (time.time() - start_wait) * 1000
+                return ConnectionContext(self, conn)
+            except asyncio.QueueEmpty:
+                # Create new connection
                 conn = await self._create_connection()
-                self._stats.total_connections += 1
-
-            self._stats.idle_connections -= 1
-            self._stats.wait_time_ms += (time.time() - start_wait) * 1000
-            return ConnectionContext(self, conn)
+                async with self._lock:
+                    self._stats.total_connections += 1
+                    self._stats.idle_connections -= 1
+                    self._stats.wait_time_ms += (time.time() - start_wait) * 1000
+                return ConnectionContext(self, conn)
 
         except Exception:
             self._semaphore.release()
@@ -228,12 +268,13 @@ class ConnectionPool:
             await self._close_connection(conn)
             return
 
-        if await self._is_healthy(conn):
-            await self._pool.put(conn)
-            self._stats.idle_connections += 1
-        else:
-            await self._close_connection(conn)
-            self._stats.total_connections -= 1
+        async with self._lock:
+            if await self._is_healthy(conn):
+                await self._pool.put(conn)
+                self._stats.idle_connections += 1
+            else:
+                await self._close_connection(conn)
+                self._stats.total_connections -= 1
 
         self._semaphore.release()
 
@@ -268,11 +309,14 @@ class ConnectionPool:
                 else:
                     raise DatabaseError("Connection does not support execute/fetch")
 
-                self._stats.queries_executed += 1
+                # FIX-026: Protect stats update with lock
+                async with self._lock:
+                    self._stats.queries_executed += 1
                 return result
 
             except asyncio.TimeoutError as e:
-                self._stats.errors += 1
+                async with self._lock:
+                    self._stats.errors += 1
                 raise TimeoutError(
                     f"Query timed out after {exec_timeout}s",
                     operation="database_query",
@@ -280,7 +324,8 @@ class ConnectionPool:
                 ) from e
 
             except Exception as e:
-                self._stats.errors += 1
+                async with self._lock:
+                    self._stats.errors += 1
                 raise DatabaseError(
                     f"Query execution failed: {e}",
                     query=query,
@@ -312,9 +357,23 @@ class ConnectionPool:
         logger.info("Connection pool closed")
 
     def get_stats(self) -> PoolStats:
-        """Get pool statistics."""
-        self._stats.active_connections = len(self._active)
-        return self._stats
+        """Get pool statistics.
+
+        Returns a snapshot of current pool statistics. The active_connections
+        count is calculated from the current _active set.
+        """
+        # Create a copy to avoid race conditions with concurrent updates
+        stats_snapshot = PoolStats(
+            total_connections=self._stats.total_connections,
+            active_connections=len(self._active),
+            idle_connections=self._stats.idle_connections,
+            max_connections=self._stats.max_connections,
+            wait_time_ms=self._stats.wait_time_ms,
+            queries_executed=self._stats.queries_executed,
+            errors=self._stats.errors,
+            created_at=self._stats.created_at,
+        )
+        return stats_snapshot
 
 
 class ConnectionContext:

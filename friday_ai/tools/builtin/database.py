@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
@@ -159,7 +158,7 @@ class DatabaseTool(Tool):
             return ToolResult.error_result("Table name is required")
 
         # Validate table name to prevent SQL injection
-        if not self._is_safe_table_name(table):
+        if not _is_safe_table_name(table):
             return ToolResult.error_result(
                 f"Invalid table name: {table}",
                 metadata={"error": "Table name contains unsafe characters"}
@@ -181,9 +180,10 @@ class DatabaseTool(Tool):
                 """
                 return await self._postgresql_query(connection, query, (table,))
             elif db_type == "mysql":
-                # Use parameterized query for DESCRIBE with table name validation
-                query = "DESCRIBE ?"
-                return await self._mysql_query(connection, query, (table,))
+                # DESCRIBE doesn't support parameters for table names
+                # Table name is validated by _is_safe_table_name above
+                query = f"DESCRIBE `{table}`"
+                return await self._mysql_query(connection, query)
             else:
                 return ToolResult.error_result(f"Unsupported database type: {db_type}")
         except Exception as e:

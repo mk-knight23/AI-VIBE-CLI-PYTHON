@@ -1,7 +1,7 @@
 """Context Compaction Strategies - Multiple strategies for intelligent context pruning."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
 
@@ -127,7 +127,7 @@ class SmartCompactor:
             List of MessageScore objects
         """
         scored_messages = []
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
 
         for msg in messages:
             role = msg.get("role", "")

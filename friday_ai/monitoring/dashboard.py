@@ -10,10 +10,7 @@ Web-based dashboard for real-time monitoring of:
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from aiohttp import web
@@ -232,6 +229,17 @@ class MonitoringDashboard:
     </div>
 
     <script>
+        // FIX-014: HTML escaping function to prevent XSS
+        function htmlEscape(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         // Auto-refresh every 2 seconds
         setInterval(refreshData, 2000);
 
@@ -267,14 +275,15 @@ class MonitoringDashboard:
                 return;
             }
 
+            // FIX-014: Use htmlEscape for all dynamic content
             tbody.innerHTML = loops.map(loop => `
                 <tr>
-                    <td>${loop.id}</td>
-                    <td><span class="status-badge ${loop.status === 'running' ? 'status-active' : 'status-idle'}">${loop.status}</span></td>
-                    <td>${loop.iteration}</td>
-                    <td>${loop.progress || 0}%</td>
+                    <td>${htmlEscape(loop.id)}</td>
+                    <td><span class="status-badge ${loop.status === 'running' ? 'status-active' : 'status-idle'}">${htmlEscape(loop.status)}</span></td>
+                    <td>${htmlEscape(loop.iteration)}</td>
+                    <td>${htmlEscape(loop.progress || 0)}%</td>
                     <td>
-                        ${loop.status === 'running' ? `<button onclick="stopLoop('${loop.id}')">Stop</button>` : ''}
+                        ${loop.status === 'running' ? `<button onclick="stopLoop('${htmlEscape(loop.id)}')">Stop</button>` : ''}
                     </td>
                 </tr>
             `).join('');
@@ -290,12 +299,13 @@ class MonitoringDashboard:
                 return;
             }
 
+            // FIX-014: Use htmlEscape for all dynamic content
             tbody.innerHTML = sessions.map(session => `
                 <tr>
-                    <td>${session.id}</td>
-                    <td>${session.status}</td>
-                    <td>${session.duration}</td>
-                    <td>${session.events}</td>
+                    <td>${htmlEscape(session.id)}</td>
+                    <td>${htmlEscape(session.status)}</td>
+                    <td>${htmlEscape(session.duration)}</td>
+                    <td>${htmlEscape(session.events)}</td>
                 </tr>
             `).join('');
         }
@@ -310,21 +320,23 @@ class MonitoringDashboard:
                 return;
             }
 
+            // FIX-014: Use htmlEscape for all dynamic content
             tbody.innerHTML = workflows.map(wf => `
                 <tr>
-                    <td>${wf.name}</td>
-                    <td>${wf.status}</td>
-                    <td>${wf.steps_completed}/${wf.total_steps}</td>
-                    <td>${wf.duration}</td>
+                    <td>${htmlEscape(wf.name)}</td>
+                    <td>${htmlEscape(wf.status)}</td>
+                    <td>${htmlEscape(wf.steps_completed)}/${htmlEscape(wf.total_steps)}</td>
+                    <td>${htmlEscape(wf.duration)}</td>
                 </tr>
             `).join('');
         }
 
+        // FIX-014: Use htmlEscape in confirm dialog to prevent XSS
         async function stopLoop(loopId) {
-            if (!confirm(`Stop loop ${loopId}?`)) return;
+            if (!confirm(`Stop loop ${htmlEscape(loopId)}?`)) return;
 
             try {
-                await fetch(`/api/loops/${loopId}/stop`, { method: 'POST' });
+                await fetch(`/api/loops/${encodeURIComponent(loopId)}/stop`, { method: 'POST' });
                 refreshData();
             } catch (error) {
                 console.error('Error stopping loop:', error);

@@ -66,8 +66,7 @@ class ToolOrchestrator:
 
         total_tools = len(self.tool_registry.get_tools())
         logger.info(
-            f"Tool orchestrator ready: {total_tools} tools "
-            f"({mcp_tool_count} from MCP servers)"
+            f"Tool orchestrator ready: {total_tools} tools ({mcp_tool_count} from MCP servers)"
         )
 
         return mcp_tool_count
@@ -79,14 +78,14 @@ class ToolOrchestrator:
             Dictionary with tool statistics
         """
         tools = self.tool_registry.get_tools()
-        mcp_servers = self.tool_registry.connected_mcp_servers
+        mcp_servers = self.mcp_manager.get_all_servers()
 
         return {
             "total_tools": len(tools),
             "builtin_tools": len([t for t in tools if not t.name.startswith("mcp__")]),
             "mcp_tools": len([t for t in tools if t.name.startswith("mcp__")]),
             "mcp_servers": len(mcp_servers),
-            "mcp_server_list": list(mcp_servers.keys()),
+            "mcp_server_list": [s["name"] for s in mcp_servers],
         }
 
     async def shutdown(self) -> None:

@@ -1,9 +1,11 @@
 from urllib.parse import urlparse
 
 import httpx
-from friday_ai.tools.base import Tool, ToolInvocation, ToolKind, ToolResult
-from friday_ai.resilience.retry import with_retry
 from pydantic import BaseModel, Field
+
+from friday_ai.resilience.retry import with_retry
+from friday_ai.tools.base import Tool, ToolInvocation, ToolKind, ToolResult
+from friday_ai.tools.builtin.http_client import get_http_client
 
 
 class WebFetchParams(BaseModel):
@@ -27,7 +29,7 @@ class WebFetchTool(Tool):
 
         parsed = urlparse(params.url)
         if not parsed.scheme or parsed.scheme not in ("http", "https"):
-            return ToolResult.error_result(f"Url must be http:// or https://")
+            return ToolResult.error_result("Url must be http:// or https://")
 
         return await self._fetch_with_retry(params)
 
@@ -43,13 +45,16 @@ class WebFetchTool(Tool):
     async def _fetch_once(self, params: WebFetchParams) -> ToolResult:
         """Execute a single fetch request."""
         try:
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(params.timeout),
-                follow_redirects=True,
-            ) as client:
-                response = await client.get(params.url)
-                response.raise_for_status()
-                text = response.text
+            # Use shared HTTP client with connection pooling
+            client = await get_http_client()
+
+            # Create request with timeout included
+            timeout = httpx.Timeout(params.timeout)
+            request = client.build_request("GET", params.url, timeout=timeout)
+
+            response = await client.send(request, follow_redirects=True)
+            response.raise_for_status()
+            text = response.text
         except httpx.HTTPStatusError as e:
             return ToolResult.error_result(
                 f"HTTP {e.response.status_code}: {e.response.reason_phrase}",

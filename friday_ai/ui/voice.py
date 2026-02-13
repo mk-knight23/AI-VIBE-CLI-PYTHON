@@ -1,6 +1,7 @@
 """Voice I/O - Voice input and output for the TUI."""
 
 import asyncio
+import sys
 from typing import Optional, Callable
 import logging
 
@@ -56,9 +57,16 @@ class VoiceInput:
         try:
             import speech_recognition as sr
 
+            # Show listening indicator
+            print("\n\033[96m🎤 Listening...\033[0m", flush=True)
+            sys.stdout.flush()
+
             with sr.Microphone() as source:
                 self._recognizer.adjust_for_ambient_noise(source)
                 audio = self._recognizer.listen(source, timeout=timeout)
+
+            # Clear the listening indicator
+            print("\r\033[F\033[K", end="", flush=True)
 
             # Recognize using specified engine
             if self.engine == "sphinx":
@@ -74,8 +82,15 @@ class VoiceInput:
                 # Auto-detect
                 return self._recognizer.recognize_google(audio)
 
+        except KeyboardInterrupt:
+            logger.info("Voice input interrupted by user")
+            # Clear the listening indicator on interrupt
+            print("\r\033[F\033[K", end="", flush=True)
+            return None
         except Exception as e:
             logger.error(f"Voice recognition error: {e}")
+            # Clear the listening indicator on error
+            print("\r\033[F\033[K", end="", flush=True)
             return None
 
     async def listen_continuous(
@@ -99,6 +114,10 @@ class VoiceInput:
                 self._recognizer.adjust_for_ambient_noise(source)
                 self._is_listening = True
 
+                # Show listening indicator
+                print("\n\033[96m🎤 Listening continuously (Press Ctrl+C to stop)...\033[0m", flush=True)
+                sys.stdout.flush()
+
                 while self._is_listening:
                     try:
                         audio = self._recognizer.listen(source, timeout=1)
@@ -111,8 +130,16 @@ class VoiceInput:
                         if on_error:
                             on_error(e)
 
+        except KeyboardInterrupt:
+            # User interrupted
+            print("\n\033[90mStopped listening.\033[0m", flush=True)
         except Exception as e:
             logger.error(f"Continuous listening error: {e}")
+            # Clear the listening indicator on error
+            print("\n\033[90mStopped listening due to error.\033[0m", flush=True)
+        finally:
+            # Final cleanup
+            self._is_listening = False
 
     def stop(self) -> None:
         """Stop listening."""

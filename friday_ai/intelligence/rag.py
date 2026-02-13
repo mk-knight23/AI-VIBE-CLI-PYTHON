@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Optional, List
 import logging
 
+from friday_ai.cache.cache import ttl_cache
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,6 +49,10 @@ class CodebaseRAG:
         self.index_dir.mkdir(parents=True, exist_ok=True)
         self._chunks: dict[str, DocumentChunk] = {}
         self._file_index: dict[str, list[str]] = {}  # file_path -> chunk_ids
+        # Cache for search results with 120 second TTL
+        self._search_cache = ttl_cache(maxsize=256, ttl=120)
+        # Cache for embeddings with 300 second TTL
+        self._embedding_cache = ttl_cache(maxsize=512, ttl=300)
 
     def index_file(
         self,
@@ -177,16 +183,27 @@ class CodebaseRAG:
         return chunks
 
     def _generate_embedding(self, text: str) -> list[float]:
-        """Generate embedding for text.
+        """Generate embedding for text with caching.
 
         Args:
             text: Text to embed.
 
         Returns:
             Embedding vector.
+
+        Note:
+            Uses a simple TF-IDF-like approach for keyword-based search.
+            This provides basic functionality without external dependencies.
         """
-        # Simple TF-IDF-like embedding for code
-        # In production, use sentence-transformers or OpenAI embeddings
+        # Create a hash key for the text
+        text_hash = hashlib.md5(text.encode()).hexdigest()
+
+        # Check cache first
+        cached = self._get_cached_embedding(text_hash, len(text))
+        if cached is not None:
+            return cached
+
+        # Generate embedding
         words = re.findall(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b", text.lower())
         word_freq = {}
         for word in words:
@@ -194,7 +211,42 @@ class CodebaseRAG:
 
         # Create a simple embedding (in production, use actual embeddings)
         embedding = list(word_freq.values())
-        return embedding[:100]  # Limit dimensions
+        result = embedding[:100]  # Limit dimensions
+
+        # Cache the result
+        self._cache_embedding(text_hash, len(text), result)
+
+        return result
+
+    @staticmethod
+    @ttl_cache(maxsize=512, ttl=300)
+    def _get_cached_embedding(text_hash: str, text_length: int) -> Optional[list[float]]:
+        """Get cached embedding (cached method).
+
+        Args:
+            text_hash: Hash of the text
+            text_length: Length of original text (for collision prevention)
+
+        Returns:
+            Cached embedding or None
+        """
+        # This is a placeholder - the actual caching happens through the decorator
+        return None
+
+    @staticmethod
+    @ttl_cache(maxsize=512, ttl=300)
+    def _cache_embedding(text_hash: str, text_length: int, embedding: list[float]) -> list[float]:
+        """Cache embedding result (cached method).
+
+        Args:
+            text_hash: Hash of the text
+            text_length: Length of original text
+            embedding: Embedding to cache
+
+        Returns:
+            The embedding (for chaining)
+        """
+        return embedding
 
     def search(
         self,
@@ -202,7 +254,40 @@ class CodebaseRAG:
         top_k: int = 5,
         file_filter: Optional[list[str]] = None,
     ) -> list[QueryResult]:
-        """Search the knowledge base.
+        """Search the knowledge base with caching.
+
+        Args:
+            query: Search query.
+            top_k: Number of results to return.
+            file_filter: Optional list of file paths to filter.
+
+        Returns:
+            List of query results.
+        """
+        # Create cache key from query and filter
+        filter_key = tuple(sorted(file_filter)) if file_filter else None
+        cache_key = (query, top_k, filter_key, len(self._chunks))
+
+        # Check cache
+        results = self._search_cache(cache_key)
+        if results:
+            return results
+
+        # Perform search
+        results = self._perform_search(query, top_k, file_filter)
+
+        # Cache results
+        self._cache_search_result(cache_key, results)
+
+        return results
+
+    def _perform_search(
+        self,
+        query: str,
+        top_k: int,
+        file_filter: Optional[list[str]]
+    ) -> list[QueryResult]:
+        """Perform the actual search operation.
 
         Args:
             query: Search query.
@@ -244,6 +329,23 @@ class CodebaseRAG:
         # Sort by score and return top k
         results.sort(key=lambda x: x.score, reverse=True)
         return results[:top_k]
+
+    @staticmethod
+    @ttl_cache(maxsize=256, ttl=120)
+    def _cache_search_result(
+        cache_key: tuple,
+        results: list[QueryResult]
+    ) -> list[QueryResult]:
+        """Cache search results (cached method).
+
+        Args:
+            cache_key: Cache key tuple
+            results: Search results to cache
+
+        Returns:
+            The results (for chaining)
+        """
+        return results
 
     def get_context(self, query: str, max_tokens: int = 4000) -> str:
         """Get relevant context for a query.

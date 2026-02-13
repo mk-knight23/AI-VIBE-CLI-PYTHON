@@ -38,6 +38,9 @@ class Task:
 class SwarmCoordinator:
     """Coordinator for swarm mode (multiple parallel agents)."""
 
+    # FIX-009: Maximum results to keep in memory
+    MAX_RESULTS_SIZE = 1000
+
     def __init__(self, max_agents: int = 4):
         """Initialize the coordinator.
 
@@ -103,6 +106,13 @@ class SwarmCoordinator:
                 self.results[task.id] = result
                 task.status = "completed"
                 task.result = result
+
+                # FIX-009: Limit results dictionary size to prevent unbounded growth
+                if len(self.results) > self.MAX_RESULTS_SIZE:
+                    # Remove oldest 20% of results
+                    keys_to_remove = list(self.results.keys())[:self.MAX_RESULTS_SIZE // 5]
+                    for key in keys_to_remove:
+                        del self.results[key]
 
                 logger.info(f"Worker {worker_id} completed task: {task.id}")
                 self.task_queue.task_done()

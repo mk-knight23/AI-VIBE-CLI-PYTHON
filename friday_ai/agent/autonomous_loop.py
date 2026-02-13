@@ -13,7 +13,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -77,6 +77,12 @@ class ResponseAnalysis:
     confidence: int = 0
     exit_reason: str | None = None
     status: str = "unknown"
+    _MAX_FILES: int = field(default=100, repr=False)  # FIX-009: Limit to prevent unbounded growth
+
+    def __post_init__(self):
+        """Ensure files_modified doesn't exceed max."""
+        if len(self.files_modified) > self._MAX_FILES:
+            self.files_modified = self.files_modified[-self._MAX_FILES:]
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -494,7 +500,7 @@ class CircuitBreaker:
             reason: Reason for the change.
         """
         self.state_history.append({
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "from_state": from_state.value,
             "to_state": self.state.value,
             "reason": reason,
@@ -541,7 +547,7 @@ class RateLimiter:
                     return datetime.fromisoformat(last_reset)
         except Exception:
             pass
-        return datetime.now()
+        return datetime.now(timezone.utc)
 
     def _save_call_count(self) -> None:
         """Save call count to file."""
@@ -558,7 +564,7 @@ class RateLimiter:
         Returns:
             True if under limit, False if exceeded.
         """
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
 
         # Reset if hour has passed
         if now - self.last_reset >= timedelta(hours=1):
@@ -576,7 +582,7 @@ class RateLimiter:
 
     def calls_remaining(self) -> int:
         """Get number of calls remaining this hour."""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
 
         # Reset if hour has passed
         if now - self.last_reset >= timedelta(hours=1):
@@ -632,7 +638,7 @@ class AutonomousLoop:
         try:
             data = json.loads(session_file.read_text())
             last_activity = datetime.fromisoformat(data.get("last_activity", "2000-01-01"))
-            age = datetime.now() - last_activity
+            age = datetime.now(timezone.utc) - last_activity
 
             if age < timedelta(hours=self.config.session_timeout_hours):
                 self.session_id = data.get("session_id")
@@ -654,7 +660,7 @@ class AutonomousLoop:
         data = {
             "session_id": self.session_id,
             "loop_number": self.loop_number,
-            "last_activity": datetime.now().isoformat(),
+            "last_activity": datetime.now(timezone.utc).isoformat(),
         }
 
         try:
@@ -675,7 +681,7 @@ class AutonomousLoop:
         data: dict[str, Any] = {
             "state": state,
             "loop_number": self.loop_number,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "circuit_breaker": {
                 "state": self.circuit_breaker.state.value,
                 "no_progress_count": self.circuit_breaker.no_progress_count,
@@ -812,7 +818,7 @@ class AutonomousLoop:
         loop_dir.mkdir(parents=True, exist_ok=True)
 
         # Log file for this iteration
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
         log_file = loop_dir / f"loop_{self.loop_number + 1:04d}_{timestamp}.log"
         self._iteration_logs.append(log_file)
 
@@ -838,6 +844,9 @@ class AutonomousLoop:
                         file_path = metadata.get("file_path") or metadata.get("path")
                         if file_path:
                             files_modified.append(file_path)
+                            # FIX-009: Limit files_modified to prevent unbounded growth
+                            if len(files_modified) > 100:
+                                files_modified = files_modified[-100:]
 
             response = "".join(response_parts)
 

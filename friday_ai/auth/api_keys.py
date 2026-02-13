@@ -5,8 +5,9 @@ In production, this should be backed by a database with proper hashing.
 """
 
 import hashlib
+import os
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
 
 from friday_ai.database.redis_backend import RedisSessionBackend
@@ -40,7 +41,7 @@ class APIKeyManager:
             "key_hash": key_hash,
             "user_id": user_id,
             "tier": tier,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "last_used": None,
             "is_active": True,
         }
@@ -70,13 +71,14 @@ class APIKeyManager:
         if key_hash in self._cache:
             metadata = self._cache[key_hash]
             if metadata.get("is_active"):
-                metadata["last_used"] = datetime.utcnow().isoformat()
+                metadata["last_used"] = datetime.now(timezone.utc).isoformat()
                 return metadata
             return None
 
-        # In production: lookup in database
-        # For Phase 1, we support a default test key
-        if api_key == "friday_test_key_12345":
+        # FIX-012: Removed hardcoded test key - use environment variable instead
+        # For testing, set FRIDAY_TEST_API_KEY environment variable
+        test_key = os.getenv("FRIDAY_TEST_API_KEY")
+        if test_key and api_key == test_key:
             return {
                 "user_id": "test_user",
                 "tier": "pro",

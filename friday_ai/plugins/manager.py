@@ -4,7 +4,7 @@ Manages plugin lifecycle, versioning, and loading.
 """
 
 import hashlib
-import import importlib.metadata
+import importlib.metadata
 import json
 import logging
 from pathlib import Path
@@ -34,7 +34,7 @@ class PluginVersion:
         """Return version string."""
         return f"{self.major}.{self.minor}.{self.patch}"
 
-    def increment(self, amount: int = 1) -> 'PluginVersion':
+    def increment(self, amount: int = 1) -> "PluginVersion":
         """Increment patch version.
 
         Args:
@@ -48,11 +48,7 @@ class PluginVersion:
 
     def __eq__(self, other: Any) -> bool:
         """Check version equality."""
-        return (
-            self.major == other.major
-            and self.minor == other.minor
-            and self.patch == other.patch
-        )
+        return self.major == other.major and self.minor == other.minor and self.patch == other.patch
 
 
 class PluginMetadata:
@@ -117,8 +113,7 @@ class Plugin:
             self.metadata = PluginMetadata(**metadata)
 
             # Load module
-            self._module = importlib.import_module(
-                f"friday_ai.plugins.{self.metadata.name}")
+            self._module = importlib.import_module(f"friday_ai.plugins.{self.metadata.name}")
             self._module = importlib.import_module(f"friday_ai.plugins.{self.metadata.name}")
             logger.info(f"Loaded plugin: {self.metadata.name}")
             return True

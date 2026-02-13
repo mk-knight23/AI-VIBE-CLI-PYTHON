@@ -4,6 +4,7 @@ from friday_ai.tools.builtin.edit_file import EditTool
 from friday_ai.tools.builtin.git import GitTool
 from friday_ai.tools.builtin.glob import GlobTool
 from friday_ai.tools.builtin.grep import GrepTool
+from friday_ai.tools.builtin.http_client import HttpClient, get_http_client, shutdown_http_client
 from friday_ai.tools.builtin.http_request import HttpDownloadTool, HttpTool
 from friday_ai.tools.builtin.list_dir import ListDirTool
 from friday_ai.tools.builtin.memory import MemoryTool
@@ -32,7 +33,10 @@ __all__ = [
     "HttpDownloadTool",
     "DockerTool",
     "DatabaseTool",
-        "SecurityAuditLogTool",
+    "SecurityAuditLogTool",
+    "HttpClient",
+    "get_http_client",
+    "shutdown_http_client",
 ]
 
 

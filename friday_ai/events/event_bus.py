@@ -4,7 +4,7 @@ Provides simple publish-subscribe pattern for events.
 """
 
 import logging
-from collections. defaultdict
+from collections import defaultdict
 from typing import Any, Callable, TYPE_CHECKING
 
 from friday_ai.agent.events import AgentEvent, AgentEventType
@@ -36,7 +36,7 @@ class EventBus:
         """
         self._subscribers[event_type].append(callback)
 
-    def publish(self, event: AgentEvent) -> None:
+    async def publish(self, event: AgentEvent) -> None:
         """Publish event to all subscribers.
 
         Args:

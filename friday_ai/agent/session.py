@@ -3,20 +3,20 @@
 import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
+from friday_ai.agent.safety_manager import SafetyManager
+from friday_ai.agent.session_metrics import SessionMetrics
+
+# New refactored components
+from friday_ai.agent.tool_orchestrator import ToolOrchestrator
 from friday_ai.client.llm_client import LLMClient
 from friday_ai.config.config import Config
 from friday_ai.config.loader import get_data_dir
 from friday_ai.context.compaction import ChatCompactor
 from friday_ai.context.loop_detector import LoopDetector
 from friday_ai.context.manager import ContextManager
-
-# New refactored components
-from friday_ai.agent.tool_orchestrator import ToolOrchestrator
-from friday_ai.agent.safety_manager import SafetyManager
-from friday_ai.agent.session_metrics import SessionMetrics
 from friday_ai.hooks.hook_system import HookSystem
 from friday_ai.tools.registry import create_default_registry
 
@@ -59,7 +59,7 @@ class Session:
         )
         self.safety_manager = SafetyManager(
             config.approval,
-            config.cwd,
+            str(config.cwd),
         )
         self.metrics = SessionMetrics(str(uuid.uuid4()))
         self.chat_compactor = ChatCompactor(self.client)
@@ -70,8 +70,8 @@ class Session:
         self.context_manager: ContextManager | None = None
 
         # Timestamps
-        self.created_at = datetime.now()
-        self.updated_at = datetime.now()
+        self.created_at = datetime.now(UTC)
+        self.updated_at = datetime.now(UTC)
 
         logger.info("Session initialized with refactored architecture")
 
@@ -130,7 +130,7 @@ class Session:
             New turn count
         """
         self.metrics.increment_turn()
-        self.updated_at = datetime.now()
+        self.updated_at = datetime.now(UTC)
         return self.metrics.turn_count
 
     def get_stats(self) -> dict[str, Any]:
@@ -142,8 +142,8 @@ class Session:
         # Update metrics with current context info
         if self.context_manager:
             self.metrics.message_count = self.context_manager.message_count
-            self.metrics.total_tokens_used = self.context_manager.total_usage
-            self.metrics.total_tokens_cached = self.context_manager.total_cached
+            self.metrics.total_tokens_used = self.context_manager.total_usage.total_tokens
+            self.metrics.total_tokens_cached = self.context_manager.total_usage.cached_tokens
 
         return self.metrics.get_stats()
 
@@ -162,7 +162,7 @@ class Session:
         session_data = {
             "session_id": self.metrics.session_id,
             "created_at": self.metrics.created_at.isoformat(),
-            "updated_at": datetime.now().isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
             "stats": self.get_stats(),
         }
 
@@ -182,5 +182,10 @@ class Session:
 
         # Shutdown tool orchestrator (MCP connections)
         await self.tool_orchestrator.shutdown()
+
+        # Shutdown HTTP client (connection pooling)
+        from friday_ai.tools.builtin.http_client import shutdown_http_client
+
+        await shutdown_http_client()
 
         logger.info("Session cleanup complete")

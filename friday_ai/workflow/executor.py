@@ -14,7 +14,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, AsyncGenerator
@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 class StepStatus(Enum):
     """Status of a workflow step."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -60,7 +61,7 @@ class WorkflowExecution:
     state: WorkflowState
     steps: list[StepExecution] = field(default_factory=list)
     current_step_index: int = 0
-    started_at: datetime = field(default_factory=datetime.now)
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: datetime | None = None
     total_duration: float | None = None
 
@@ -139,9 +140,7 @@ class WorkflowExecutor:
 
         # Initialize step executions
         for step in workflow.steps:
-            execution.steps.append(
-                StepExecution(step=step)
-            )
+            execution.steps.append(StepExecution(step=step))
 
         self._executions[workflow_name] = execution
 
@@ -174,13 +173,13 @@ class WorkflowExecutor:
             # Execute the step
             try:
                 step_exec.status = StepStatus.IN_PROGRESS
-                step_exec.started_at = datetime.now()
+                step_exec.started_at = datetime.now(timezone.utc)
 
                 result = await self._execute_step(step, execution.state)
 
                 step_exec.status = StepStatus.COMPLETED
                 step_exec.result = result
-                step_exec.completed_at = datetime.now()
+                step_exec.completed_at = datetime.now(timezone.utc)
                 step_exec.duration = (step_exec.completed_at - step_exec.started_at).total_seconds()
 
                 execution.state.completed_steps.append(execution.current_step_index)
@@ -201,8 +200,12 @@ class WorkflowExecutor:
                 error_msg = str(e)
                 step_exec.status = StepStatus.FAILED
                 step_exec.error = error_msg
-                step_exec.completed_at = datetime.now()
-                step_exec.duration = (step_exec.completed_at - step_exec.started_at).total_seconds() if step_exec.started_at else None
+                step_exec.completed_at = datetime.now(timezone.utc)
+                step_exec.duration = (
+                    (step_exec.completed_at - step_exec.started_at).total_seconds()
+                    if step_exec.started_at
+                    else None
+                )
 
                 execution.state.errors.append(error_msg)
 
@@ -223,7 +226,7 @@ class WorkflowExecutor:
             execution.current_step_index += 1
 
         # Workflow complete
-        execution.completed_at = datetime.now()
+        execution.completed_at = datetime.now(timezone.utc)
         execution.total_duration = (execution.completed_at - execution.started_at).total_seconds()
 
         yield AgentEvent(
@@ -364,10 +367,7 @@ Focus on your area of expertise and provide a thorough, actionable response.
                     yield event
 
         # Create tasks
-        tasks = [
-            execute_with_semaphore(name)
-            for name in workflow_names
-        ]
+        tasks = [execute_with_semaphore(name) for name in workflow_names]
 
         # Run in parallel
         for task in tasks:

@@ -1,13 +1,14 @@
 """FastAPI server factory and application setup."""
 
 import logging
+import os
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
+from friday_ai.api.exceptions import setup_exception_handlers
 from friday_ai.api.routers import health, runs, sessions, tools
 from friday_ai.auth.api_keys import APIKeyManager
 from friday_ai.config.config import Config
@@ -90,13 +91,18 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
     )
 
-    # CORS middleware
+    # FIX-011: CORS - Use environment-specific origins
+    cors_origins = os.getenv(
+        "FRIDAY_CORS_ORIGINS",
+        "http://localhost:3000,http://localhost:8000"
+    ).split(",")
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Configure for production
+        allow_origins=cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
     )
 
     # Include routers
@@ -117,20 +123,7 @@ def create_app() -> FastAPI:
         tags=["runs"],
     )
 
-    # Exception handlers
-    @app.exception_handler(Exception)
-    async def generic_exception_handler(request, exc):
-        logger.exception("Unhandled exception")
-        error_msg = str(exc) if app.debug else "An unexpected error occurred"
-        return JSONResponse(
-            status_code=500,
-            content={
-                "success": False,
-                "error": {
-                    "code": "INTERNAL_ERROR",
-                    "message": error_msg,
-                },
-            },
-        )
+    # Setup standardized exception handlers
+    setup_exception_handlers(app)
 
     return app

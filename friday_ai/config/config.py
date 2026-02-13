@@ -14,9 +14,7 @@ class ModelConfig(BaseModel):
 
 class ShellEnvironmentPolicy(BaseModel):
     ignore_default_excludes: bool = False
-    exclude_patterns: list[str] = Field(
-        default_factory=lambda: ["*KEY*", "*TOKEN*", "*SECRET*"]
-    )
+    exclude_patterns: list[str] = Field(default_factory=lambda: ["*KEY*", "*TOKEN*", "*SECRET*"])
     set_vars: dict[str, str] = Field(default_factory=dict)
 
 
@@ -39,14 +37,10 @@ class MCPServerConfig(BaseModel):
         has_url = self.url is not None
 
         if not has_command and not has_url:
-            raise ValueError(
-                "MCP Server must have either 'command' (stdio) or 'url' (http/sse)"
-            )
+            raise ValueError("MCP Server must have either 'command' (stdio) or 'url' (http/sse)")
 
         if has_command and has_url:
-            raise ValueError(
-                "MCP Server cannot have both 'command' (stdio) and 'url' (http/sse)"
-            )
+            raise ValueError("MCP Server cannot have both 'command' (stdio) and 'url' (http/sse)")
 
         return self
 
@@ -86,9 +80,7 @@ class HookConfig(BaseModel):
 class Config(BaseModel):
     model: ModelConfig = Field(default_factory=ModelConfig)
     cwd: Path = Field(default_factory=Path.cwd)
-    shell_environment: ShellEnvironmentPolicy = Field(
-        default_factory=ShellEnvironmentPolicy
-    )
+    shell_environment: ShellEnvironmentPolicy = Field(default_factory=ShellEnvironmentPolicy)
     hooks_enabled: bool = False
     hooks: list[HookConfig] = Field(default_factory=list)
     approval: ApprovalPolicy = ApprovalPolicy.ON_REQUEST
@@ -104,31 +96,26 @@ class Config(BaseModel):
     user_instructions: str | None = None
 
     debug: bool = False
+    accessible: bool = False  # FIX-083: Accessible UI mode (high contrast)
 
     # .claude folder integration settings
     claude_dir: Path | None = Field(
-        default=None,
-        description="Path to .claude directory. Auto-discovered if not set."
+        default=None, description="Path to .claude directory. Auto-discovered if not set."
     )
     claude_agents_enabled: bool = Field(
-        default=True,
-        description="Enable loading agents from .claude/agents/"
+        default=True, description="Enable loading agents from .claude/agents/"
     )
     claude_skills_enabled: bool = Field(
-        default=True,
-        description="Enable loading skills from .claude/skills/"
+        default=True, description="Enable loading skills from .claude/skills/"
     )
     claude_rules_enabled: bool = Field(
-        default=True,
-        description="Enable loading rules from .claude/rules/"
+        default=True, description="Enable loading rules from .claude/rules/"
     )
     claude_workflows_enabled: bool = Field(
-        default=True,
-        description="Enable loading workflows from .claude/workflows/"
+        default=True, description="Enable loading workflows from .claude/workflows/"
     )
     claude_commands_enabled: bool = Field(
-        default=True,
-        description="Enable loading commands from .claude/commands/"
+        default=True, description="Enable loading commands from .claude/commands/"
     )
 
     @property
@@ -184,6 +171,7 @@ class Config(BaseModel):
 
         try:
             from friday_ai.claude_integration.utils import find_claude_dir
+
             return find_claude_dir(self.cwd)
         except ImportError:
             return None

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from friday_ai.client.response import TokenUsage
 from friday_ai.config.config import Config
@@ -36,6 +36,7 @@ class MessageItem:
 class ContextManager:
     PRUNE_PROTECT_TOKENS = 40_000
     PRUNE_MINIMUM_TOKENS = 20_000
+    MAX_MESSAGES = 200  # FIX-009: Limit total message count to prevent memory growth
 
     def __init__(
         self,
@@ -49,6 +50,14 @@ class ContextManager:
         self._messages: list[MessageItem] = []
         self._latest_usage = TokenUsage()
         self.total_usage = TokenUsage()
+
+    def _enforce_limits(self) -> None:
+        """Enforce message limits to prevent unbounded growth."""
+        if len(self._messages) > self.MAX_MESSAGES:
+            # Remove oldest messages, but try to keep pairs
+            # Since system prompt is handled separately in get_messages,
+            # we just truncate the list.
+            self._messages = self._messages[-self.MAX_MESSAGES :]
 
     @property
     def message_count(self) -> int:
@@ -65,11 +74,12 @@ class ContextManager:
         )
 
         self._messages.append(item)
+        self._enforce_limits()
 
     def add_assistant_message(
         self,
         content: str,
-        tool_calls: list[dict[str, any]] | None = None,
+        tool_calls: list[dict[str, Any]] | None = None,
     ) -> None:
         item = MessageItem(
             role="assistant",
@@ -82,6 +92,7 @@ class ContextManager:
         )
 
         self._messages.append(item)
+        self._enforce_limits()
 
     def add_tool_result(self, tool_call_id: str, content: str) -> None:
         item = MessageItem(
@@ -92,6 +103,7 @@ class ContextManager:
         )
 
         self._messages.append(item)
+        self._enforce_limits()
 
     def get_messages(self) -> list[dict[str, Any]]:
         messages = []
@@ -201,10 +213,22 @@ I'll continue with the REMAINING tasks only, starting from where we left off."""
         for msg in to_prune:
             msg.content = "[Old tool result content cleared]"
             msg.token_count = count_tokens(msg.content, self._model_name)
-            msg.pruned_at = datetime.now()
+            msg.pruned_at = datetime.now(timezone.utc)
             pruned_count += 1
 
         return pruned_count
+
+    def add_message(self, message: dict[str, Any]) -> None:
+        """Add a raw message to the context."""
+        role = message.get("role")
+        content = message.get("content", "")
+
+        if role == "user":
+            self.add_user_message(content)
+        elif role == "assistant":
+            self.add_assistant_message(content, message.get("tool_calls"))
+        elif role == "tool":
+            self.add_tool_result(message.get("tool_call_id", ""), content)
 
     def clear(self) -> None:
         self._messages = []

@@ -1,9 +1,9 @@
 """Tool execution endpoints."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 
 from friday_ai.api.dependencies import (
     check_rate_limit,
@@ -14,6 +14,7 @@ from friday_ai.api.models.responses import ErrorResponse, ToolResponse
 from friday_ai.config.config import Config
 from friday_ai.tools.base import ToolInvocation
 from friday_ai.tools.registry import ToolRegistry
+from friday_ai.utils.errors import ToolNotFoundError, ValidationError
 
 router = APIRouter()
 
@@ -56,13 +57,10 @@ async def execute_tool(
 
     # Check if tool exists
     if tool_name not in registry._tools:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tool not found: {tool_name}",
-        )
+        raise ToolNotFoundError(tool=tool_name)
 
     # Execute tool
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc)
     try:
         invocation = ToolInvocation(
             params=request.params,
@@ -71,7 +69,7 @@ async def execute_tool(
 
         result = await registry.execute(tool_name, invocation)
 
-        execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        execution_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
         return ToolResponse(
             success=result.success,
@@ -81,7 +79,7 @@ async def execute_tool(
         )
 
     except Exception as e:
-        execution_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        execution_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
         return ToolResponse(
             success=False,
             output="",
@@ -101,9 +99,6 @@ async def get_tool_schema(
 
     tool = registry._tools.get(tool_name)
     if not tool:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Tool not found: {tool_name}",
-        )
+        raise ToolNotFoundError(tool=tool_name)
 
     return tool.schema if hasattr(tool, "schema") else {}

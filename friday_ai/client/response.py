@@ -50,7 +50,7 @@ class ToolCallDelta:
 class ToolCall:
     call_id: str
     name: str | None = None
-    arguments: str = ""
+    arguments: dict[str, Any] | str = ""
 
 
 @dataclass

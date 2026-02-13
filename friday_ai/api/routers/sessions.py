@@ -3,17 +3,19 @@
 from datetime import datetime
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 
 from friday_ai.api.dependencies import (
     check_rate_limit,
     get_current_user,
     get_redis_backend,
 )
+from friday_ai.api.exceptions import APIError
 from friday_ai.api.models.requests import SessionCreateRequest
 from friday_ai.api.models.responses import ErrorResponse, SessionResponse
 from friday_ai.api.services.session_service import SessionService
 from friday_ai.database.redis_backend import RedisSessionBackend
+from friday_ai.utils.errors import AuthenticationError, AuthorizationError, SessionNotFoundError
 
 router = APIRouter()
 
@@ -102,16 +104,14 @@ async def get_session(
     session = await service.get_session(session_id)
 
     if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found",
-        )
+        raise SessionNotFoundError(session_id=session_id)
 
     # Verify ownership
     if session.user_id != user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied",
+        raise AuthorizationError(
+            message="Access denied to session",
+            resource="session",
+            action="read",
         )
 
     return SessionResponse(
@@ -140,15 +140,13 @@ async def delete_session(
     session = await service.get_session(session_id)
 
     if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found",
-        )
+        raise SessionNotFoundError(session_id=session_id)
 
     if session.user_id != user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied",
+        raise AuthorizationError(
+            message="Access denied to session",
+            resource="session",
+            action="delete",
         )
 
     await service.delete_session(session_id)

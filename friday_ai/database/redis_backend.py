@@ -1,13 +1,13 @@
 """Redis-backed session storage for Friday AI.
 
 Provides production-grade session persistence with:
-- Automatic serialization (pickle for complex objects)
+- JSON serialization (secure, no pickle)
 - Compression for large sessions
 - TTL-based expiration
 - Connection pooling
 """
 
-import pickle
+import json
 import zlib
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -85,16 +85,16 @@ class RedisSessionBackend:
         return f"{self.key_prefix}{session_id}"
 
     def _serialize(self, data: SessionData) -> bytes:
-        """Serialize session data with optional compression."""
-        # Pickle the data
-        pickled = pickle.dumps(data, protocol=pickle.HIGHEST_PROTOCOL)
+        """Serialize session data with optional compression using JSON."""
+        # Convert to dict, then JSON
+        json_bytes = data.model_dump_json().encode("utf-8")
 
         # Compress if exceeds threshold
-        if len(pickled) > self.compression_threshold:
-            compressed = zlib.compress(pickled, level=6)
+        if len(json_bytes) > self.compression_threshold:
+            compressed = zlib.compress(json_bytes, level=6)
             return self.COMPRESSED_FLAG + compressed
 
-        return self.UNCOMPRESSED_FLAG + pickled
+        return self.UNCOMPRESSED_FLAG + json_bytes
 
     def _deserialize(self, data: bytes) -> SessionData:
         """Deserialize session data, handling compression."""
@@ -107,7 +107,8 @@ class RedisSessionBackend:
         if flag == self.COMPRESSED_FLAG:
             payload = zlib.decompress(payload)
 
-        return pickle.loads(payload)
+        # Parse JSON and create SessionData
+        return SessionData.model_validate_json(payload)
 
     async def save(self, session: SessionData) -> None:
         """Save session to Redis.
@@ -119,16 +120,18 @@ class RedisSessionBackend:
             raise RuntimeError("Redis not connected")
 
         key = self._make_key(session.id)
+        user_sessions_key = f"friday:user:{session.user_id}:sessions"
 
         # Update timestamp
-        session.updated_at = datetime.utcnow()
+        session.updated_at = datetime.now(timezone.utc)
 
         # Serialize and store
         data = self._serialize(session)
-        await self._redis.setex(key, self.default_ttl, data)
 
-        # Update user index
-        await self._redis.sadd(f"friday:user:{session.user_id}:sessions", session.id)
+        async with self._redis.pipeline(transaction=True) as pipe:
+            pipe.setex(key, self.default_ttl, data)
+            pipe.sadd(user_sessions_key, session.id)
+            await pipe.execute()
 
     async def load(self, session_id: str) -> Optional[SessionData]:
         """Load session from Redis.
@@ -169,9 +172,7 @@ class RedisSessionBackend:
         # Get session first to remove from user index
         session = await self.load(session_id)
         if session:
-            await self._redis.srem(
-                f"friday:user:{session.user_id}:sessions", session_id
-            )
+            await self._redis.srem(f"friday:user:{session.user_id}:sessions", session_id)
 
         key = self._make_key(session_id)
         result = await self._redis.delete(key)

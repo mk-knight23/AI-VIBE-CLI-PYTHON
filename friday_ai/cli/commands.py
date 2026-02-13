@@ -4,14 +4,15 @@ Extracted from main.py to reduce file size and improve maintainability.
 """
 
 import logging
-from pathlib import Path
 from typing import Any
 
-from friday_ai.config.config import ApprovalPolicy, Config
-from friday_ai.agent.session import Session
+from rich.console import Console
+
 from friday_ai.agent.persistence import PersistenceManager, SessionSnapshot
+from friday_ai.agent.session import Session
 
 logger = logging.getLogger(__name__)
+console = Console()
 
 
 async def handle_save(
@@ -26,7 +27,15 @@ async def handle_save(
     """
     try:
         persistence_manager = PersistenceManager()
-        snapshot = persistence_manager.save_session(session.session_id, session)
+        snapshot = SessionSnapshot(
+            session_id=session.session_id,
+            created_at=session.created_at,
+            updated_at=session.updated_at,
+            turn_count=session.turn_count,
+            messages=session.context_manager.get_messages(),
+            total_usage=session.context_manager.total_usage,
+        )
+        await persistence_manager.save_session(snapshot)
         console.print(f"[success]Session saved: {session.session_id}[/success]")
     except Exception as e:
         console.print(f"[error]Failed to save session: {e}[/error]")
@@ -41,8 +50,8 @@ async def handle_sessions(session: Session, args: dict[str, Any]) -> None:
     """
     try:
         persistence_manager = PersistenceManager()
-        sessions = persistence_manager.list_sessions()
-        console.print(f"\n[bold]Saved Sessions[/bold]")
+        sessions = await persistence_manager.list_sessions()
+        console.print("\n[bold]Saved Sessions[/bold]")
         if not sessions:
             console.print("  No saved sessions found")
         else:
@@ -66,7 +75,7 @@ async def handle_resume(session: Session, args: dict[str, Any]) -> None:
 
     try:
         persistence_manager = PersistenceManager()
-        snapshot = persistence_manager.load_session(session_id)
+        snapshot = await persistence_manager.load_session(session_id)
         if not snapshot:
             console.print(f"[error]Session not found: {session_id}[/error]")
             return
@@ -76,7 +85,6 @@ async def handle_resume(session: Session, args: dict[str, Any]) -> None:
 
         config = session.config
         from friday_ai.agent.autonomous.circuit_breaker import CircuitBreakerControl
-        from friday_ai.agent.autonomous.status import StatusDisplay
 
         # Initialize new session with resumed state
         session.agent.session_id = snapshot.session_id

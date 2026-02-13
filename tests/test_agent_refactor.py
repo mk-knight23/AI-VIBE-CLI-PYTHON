@@ -4,7 +4,12 @@ import pytest
 from unittest.mock import Mock, AsyncMock
 
 from friday_ai.config.config import Config
-from friday_ai.agent.tool_orchestrator import ToolOrchestrator
+
+try:
+    from friday_ai.agent.tool_orchestrator import ToolOrchestrator
+except ImportError:
+    pytest.skip("fastmcp not available", allow_module_level=True)
+
 from friday_ai.agent.safety_manager import SafetyManager
 from friday_ai.agent.session_metrics import SessionMetrics
 from friday_ai.tools.registry import ToolRegistry
@@ -106,6 +111,7 @@ class TestSafetyManager:
         """Test path validation."""
         # Mock validator
         from friday_ai.safety.validators import validate_path_safe
+
         safety_manager.validate_path = Mock(return_value=True)
 
         result = safety_manager.validate_path("/test/dir/file.txt")
@@ -117,6 +123,7 @@ class TestSafetyManager:
         """Test command validation."""
         # Mock validator
         from friday_ai.safety.validators import validate_command_safe
+
         safety_manager.validate_command = Mock(return_value=True)
 
         result = safety_manager.validate_command("ls -la")
@@ -128,6 +135,7 @@ class TestSafetyManager:
         """Test secret scrubbing."""
         # Mock secret manager
         from friday_ai.security.secret_manager import scrub_secrets_from_text
+
         safety_manager.scrub_secrets = Mock(side_effect=lambda x: x.replace("sk-1234", "****"))
 
         result = safety_manager.scrub_secrets("API key: sk-1234")

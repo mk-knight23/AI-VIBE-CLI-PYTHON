@@ -5,77 +5,75 @@ Collects and exports metrics in Prometheus format.
 
 import logging
 import time
+import threading
 from collections import defaultdict
-from typing import Any, Callable
-from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
+from enum import Enum
 
 from friday_ai.config.config import Config
 
 logger = logging.getLogger(__name__)
 
 
-class MetricType:
+class MetricKind(Enum):
     """Types of metrics."""
 
     COUNTER = "counter"
     GAUGE = "gauge"
     HISTOGRAM = "histogram"
 
-    def __init__(self, name: str, metric_type: str, description: str):
+
+class Metric:
+    """Individual metric tracking object."""
+
+    def __init__(self, name: str, kind: MetricKind, description: str):
         """Initialize metric.
 
         Args:
-            name: Metric name (e.g., "tool_executions")
-            metric_type: Counter, gauge, histogram
-            description: Human-readable description
+            name: Metric name
+            kind: Metric kind (counter, gauge, histogram)
+            description: Metric description
         """
         self.name = name
-        self.type = metric_type
+        self.kind = kind
         self.description = description
-        self._value = 0
         self._count = 0
-        self._sum = 0
-        self._min = float('inf')
-        self._max = 0
-        self._buckets: dict[int, int] = defaultdict(int)
-        self._lock = asyncio.Lock()
+        self._sum = 0.0
+        self._min = float("inf")
+        self._max = 0.0
+        self._lock = threading.Lock()
 
-    def inc(self) -> None:
-        """Increment counter."""
+    def inc(self, amount: float = 1.0) -> None:
+        """Increment counter metric."""
         with self._lock:
             self._count += 1
-            self._sum += 1
+            self._sum += amount
 
     def set(self, value: float) -> None:
-        """Set gauge value."""
-        self._value = value
-        if value > self._max:
-            self._max = value
-        elif value < self._min:
-            self._min = value
+        """Set gauge metric value."""
+        with self._lock:
+            self._sum = value
+            self._max = max(self._max, value)
+            self._min = min(self._min, value)
 
     def observe(self, value: float) -> None:
-        """Observe value for histogram."""
-        if value < self._min:
-            self._min = value
-        if value > self._max:
-            self._max = value
-        bucket_index = int(value / 10)
-        self._buckets[bucket_index] += 1
+        """Observe value for histogram/summary."""
+        with self._lock:
+            self._count += 1
+            self._sum += value
+            self._max = max(self._max, value)
+            self._min = min(self._min, value)
 
-    def get_stats(self) -> dict[str, Any]:
-        """Get metric statistics.
-
-        Returns:
-            Dictionary with metric statistics
-        """
-        return {
-            "count": self._count,
-            "sum": self._sum,
-            "min": self._min,
-            "max": self._max,
-            "average": self._sum / self._count if self._count else 0,
-        }
+    def get_stats(self) -> Dict[str, Any]:
+        """Get metric statistics."""
+        with self._lock:
+            return {
+                "count": self._count,
+                "sum": self._sum,
+                "min": 0.0 if self._min == float("inf") else self._min,
+                "max": self._max,
+                "average": self._sum / self._count if self._count else 0.0,
+            }
 
 
 class MetricsCollector:
@@ -88,79 +86,50 @@ class MetricsCollector:
             config: Configuration
         """
         self.config = config
-        self.metrics = defaultdict(lambda: MetricType: dict[str, MetricType])
+        self._metrics: Dict[str, Metric] = {}
+        self._lock = threading.Lock()
         self._start_time = time.time()
-        self._lock = asyncio.Lock()
 
-    def counter(self, name: str, description: str) -> MetricType.COUNTER:
-        """Create or get counter metric.
+    def counter(self, name: str, description: str) -> Metric:
+        """Create or get counter metric."""
+        with self._lock:
+            if name not in self._metrics:
+                self._metrics[name] = Metric(name, MetricKind.COUNTER, description)
+            return self._metrics[name]
 
-        Args:
-            name: Metric name
-            description: Metric description
+    def gauge(self, name: str, description: str) -> Metric:
+        """Create or get gauge metric."""
+        with self._lock:
+            if name not in self._metrics:
+                self._metrics[name] = Metric(name, MetricKind.GAUGE, description)
+            return self._metrics[name]
 
-        Returns:
-            Counter metric
-        """
-        metric = MetricType.COUNTER(name, description)
-        self.metrics[metric_type][name] = metric
-        return metric
-
-    def gauge(self, name: str, description: str) -> MetricType.GAUGE:
-        """Create or get gauge metric.
-
-        Args:
-            name: Metric name
-            description: Metric description
-
-        Returns:
-            Gauge metric
-        """
-        metric = MetricType.GAUGE(name, description)
-        self.metrics[metric_type][name] = metric
-        return metric
-
-    def histogram(self, name: str, description: str, buckets: int = 10) -> MetricType.HISTOGRAM:
-        """Create or get histogram metric.
-
-        Args:
-            name: Metric name
-            description: Metric description
-            buckets: Number of histogram buckets
-
-        Returns:
-            Histogram metric
-        """
-        metric = MetricType.HISTOGRAM(name, description, buckets=buckets)
-        self.metrics[metric_type][name] = metric
-        return metric
+    def histogram(self, name: str, description: str) -> Metric:
+        """Create or get histogram metric."""
+        with self._lock:
+            if name not in self._metrics:
+                self._metrics[name] = Metric(name, MetricKind.HISTOGRAM, description)
+            return self._metrics[name]
 
     def export_prometheus(self) -> str:
-        """Export all metrics in Prometheus format.
-
-        Returns:
-            Prometheus text format
-        """
+        """Export all metrics in Prometheus format."""
         lines = []
+        with self._lock:
+            for name, metric in self._metrics.items():
+                lines.append(f"# HELP {name} {metric.description}")
+                lines.append(f"# TYPE {name} {metric.kind.value}")
 
-        for metric_type, metrics in self.metrics.items():
-            for name, metric in metrics.items():
-                if metric.type == MetricType.COUNTER:
-                    lines.append(
-                        f"{metric.get_stats().get('count', 0)}"
-                    )
-                elif metric.type == MetricType.GAUGE:
-                    lines.append(
-                        f"{metric.get_stats().get('sum', 0)}"
-                    )
-                elif metric.type == MetricType.HISTOGRAM:
-                    lines.append(
-                        f"{metric.get_stats().get('count', 0)}"
-                    )
+                stats = metric.get_stats()
+                if metric.kind == MetricKind.GAUGE:
+                    lines.append(f"{name} {stats['sum']}")
+                else:
+                    lines.append(f"{name}_count {stats['count']}")
+                    lines.append(f"{name}_sum {stats['sum']}")
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
     def reset(self) -> None:
         """Reset all metrics."""
-        self.metrics.clear()
-        self._start_time = time.time()
+        with self._lock:
+            self._metrics.clear()
+            self._start_time = time.time()

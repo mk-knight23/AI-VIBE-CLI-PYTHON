@@ -11,24 +11,28 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-from friday_ai.agent.agent import Agent
-
-logger = logging.getLogger(__name__)
-from friday_ai.agent.events import AgentEventType
-from friday_ai.agent.persistence import PersistenceManager, SessionSnapshot
-from friday_ai.agent.session import Session
+# Essential imports - used at module level or in __init__
 from friday_ai.config.config import ApprovalPolicy, Config
 from friday_ai.config.loader import load_config, get_data_dir
 from friday_ai.ui.tui import TUI, get_console
 
+logger = logging.getLogger(__name__)
+
+# Lazy imports - moved to where they're actually used
+# These are imported only when needed:
+# - Agent: Used in run_single(), run_interactive(), _start_autonomous_loop()
+# - AgentEventType: Used in _process_message()
+# - PersistenceManager, SessionSnapshot: Used in /save, /sessions, /resume commands
+# - Session: Used in /resume, /restore commands
+
 # Voice imports (lazy load)
 try:
-    from friday_ai.ui.voice import VoiceManager, VoiceStatus
+    from friday_ai.ui.voice import VoiceManager
+
     VOICE_AVAILABLE = True
 except ImportError:
     VOICE_AVAILABLE = False
     VoiceManager = None  # type: ignore
-    VoiceStatus = None  # type: ignore
 
 console = get_console()
 
@@ -38,13 +42,14 @@ __version__ = "1.0.0"
 
 class CLI:
     def __init__(self, config: Config):
-        self.agent: Agent | None = None
+        self.agent: Any | None = None  # Agent | None - lazy import
         self.config = config
         self.tui = TUI(config, console)
         self._claude_context: Any | None = None
         self._command_mapper: Any | None = None
+        self._autonomous_loop: Any | None = None
         self._workflow_engine: Any | None = None
-        self.voice_manager: VoiceManager | None = None
+        self.voice_manager: Any | None = None  # VoiceManager | None - lazy import
         self.voice_enabled = False
 
     def _init_claude_integration(self) -> None:
@@ -107,11 +112,15 @@ class CLI:
             logger.debug(f"Failed to initialize .claude integration: {e}")
 
     async def run_single(self, message: str) -> str | None:
+        from friday_ai.agent.agent import Agent
+
         async with Agent(self.config) as agent:
             self.agent = agent
             return await self._process_message(message)
 
     async def run_interactive(self) -> str | None:
+        from friday_ai.agent.agent import Agent
+
         self.tui.print_welcome(
             "Friday",
             lines=[
@@ -148,13 +157,16 @@ class CLI:
         console.print("\n[dim]Goodbye![/dim]")
 
     def _get_tool_kind(self, tool_name: str) -> str | None:
-        tool = self.agent.session.tool_registry.get(tool_name)
-        if not tool:
-            return None
-
-        return tool.kind.value
+        if self.agent and self.agent.session:
+            tool = self.agent.session.tool_orchestrator.tool_registry.get(tool_name)
+            if not tool:
+                return None
+            return tool.kind.value
+        return None
 
     async def _process_message(self, message: str) -> str | None:
+        from friday_ai.agent.events import AgentEventType
+
         if not self.agent:
             return None
 
@@ -203,6 +215,39 @@ class CLI:
 
         return final_response
 
+    async def _enable_voice(self) -> None:
+        """Enable voice I/O."""
+        if not VOICE_AVAILABLE:
+            console.print("[error]Voice support not available (install 'voice' extras)[/error]")
+            return
+
+        if not self.voice_manager:
+            if VoiceManager:
+                self.voice_manager = VoiceManager()
+            else:
+                return
+
+        console.print("[dim]Initializing voice engine...[/dim]")
+        success = await self.voice_manager.initialize()
+        if success:
+            self.voice_enabled = True
+            console.print("[success]Voice I/O enabled[/success]")
+        else:
+            console.print("[error]Failed to initialize voice engine[/error]")
+
+    def _disable_voice(self) -> None:
+        """Disable voice I/O."""
+        self.voice_enabled = False
+        console.print("[success]Voice I/O disabled[/success]")
+
+    def _show_voice_status(self) -> None:
+        """Show voice status."""
+        status = "Enabled" if self.voice_enabled else "Disabled"
+        console.print(f"Voice Status: {status}")
+        if self.voice_manager:
+            details = self.voice_manager.get_status()
+            console.print(f"Details: {details}")
+
     async def _handle_command(self, command: str) -> bool:
         cmd = command.lower().strip()
         parts = cmd.split(maxsplit=1)
@@ -214,8 +259,10 @@ class CLI:
         elif command == "/help":
             self.tui.show_help()
         elif command == "/clear":
-            self.agent.session.context_manager.clear()
-            self.agent.session.loop_detector.clear()
+            if self.agent and self.agent.session:
+                if self.agent.session.context_manager:
+                    self.agent.session.context_manager.clear()
+                self.agent.session.loop_detector.clear()
             console.print("[success]Conversation cleared [/success]")
         elif command == "/config":
             console.print("\n[bold]Current Configuration[/bold]")
@@ -236,28 +283,23 @@ class CLI:
                 try:
                     approval = ApprovalPolicy(cmd_args)
                     self.config.approval = approval
-                    console.print(
-                        f"[success]Approval policy changed to: {cmd_args} [/success]"
-                    )
-                except:
-                    console.print(
-                        f"[error]Incorrect approval policy: {cmd_args} [/error]"
-                    )
-                    console.print(
-                        f"Valid options: {', '.join(p for p in ApprovalPolicy)}"
-                    )
+                    console.print(f"[success]Approval policy changed to: {cmd_args} [/success]")
+                except ValueError:
+                    console.print(f"[error]Incorrect approval policy: {cmd_args} [/error]")
+                    console.print(f"Valid options: {', '.join(p for p in ApprovalPolicy)}")
             else:
                 console.print(f"Current approval policy: {self.config.approval.value}")
         elif cmd_name == "/stats":
-            stats = self.agent.session.get_stats()
-            console.print("\n[bold]Session Statistics [/bold]")
-            for key, value in stats.items():
-                console.print(f"   {key}: {value}")
+            if self.agent and self.agent.session:
+                stats = self.agent.session.get_stats()
+                console.print("\n[bold]Session Statistics [/bold]")
+                for key, value in stats.items():
+                    console.print(f"   {key}: {value}")
         elif cmd_name == "/voice":
             # Voice commands
             if cmd_args:
                 if cmd_args == "on":
-                    self._enable_voice()
+                    await self._enable_voice()
                 elif cmd_args == "off":
                     self._disable_voice()
                 elif cmd_args == "status":
@@ -268,36 +310,52 @@ class CLI:
             else:
                 self._show_voice_status()
         elif cmd_name == "/tools":
-            tools = self.agent.session.tool_registry.get_tools()
-            console.print(f"\n[bold]Available tools ({len(tools)}) [/bold]")
-            for tool in tools:
-                console.print(f"  • {tool.name}")
+            if self.agent and self.agent.session:
+                tools = self.agent.session.tool_orchestrator.tool_registry.get_tools()
+                console.print(f"\n[bold]Available tools ({len(tools)}) [/bold]")
+                for tool in tools:
+                    console.print(f"  • {tool.name}")
         elif cmd_name == "/mcp":
-            mcp_servers = self.agent.session.mcp_manager.get_all_servers()
-            console.print(f"\n[bold]MCP Servers ({len(mcp_servers)}) [/bold]")
-            for server in mcp_servers:
-                status = server["status"]
-                status_color = "green" if status == "connected" else "red"
-                console.print(
-                    f"  • {server['name']}: [{status_color}]{status}[/{status_color}] ({server['tools']} tools)"
-                )
+            if self.agent and self.agent.session:
+                mcp_manager = self.agent.session.tool_orchestrator.mcp_manager
+                mcp_servers = mcp_manager.get_all_servers()
+                console.print(f"\n[bold]MCP Servers ({len(mcp_servers)}) [/bold]")
+                for server in mcp_servers:
+                    status = server["status"]
+                    status_color = "green" if status == "connected" else "red"
+                    console.print(
+                        f"  • {server['name']}: [{status_color}]{status}[/{status_color}] ({server['tools']} tools)"
+                    )
         elif cmd_name == "/save":
-            persistence_manager = PersistenceManager()
-            session_snapshot = SessionSnapshot(
-                session_id=self.agent.session.session_id,
-                created_at=self.agent.session.created_at,
-                updated_at=self.agent.session.updated_at,
-                turn_count=self.agent.session.turn_count,
-                messages=self.agent.session.context_manager.get_messages(),
-                total_usage=self.agent.session.context_manager.total_usage,
-            )
-            persistence_manager.save_session(session_snapshot)
-            console.print(
-                f"[success]Session saved: {self.agent.session.session_id}[/success]"
-            )
+            if self.agent and self.agent.session:
+                from friday_ai.agent.persistence import PersistenceManager, SessionSnapshot
+
+                persistence_manager = PersistenceManager()
+                session_snapshot = SessionSnapshot(
+                    session_id=self.agent.session.metrics.session_id,
+                    created_at=self.agent.session.created_at,
+                    updated_at=self.agent.session.updated_at,
+                    turn_count=self.agent.session.metrics.turn_count,
+                    messages=(
+                        self.agent.session.context_manager.get_messages()
+                        if self.agent.session.context_manager
+                        else []
+                    ),
+                    total_usage=(
+                        self.agent.session.context_manager.total_usage
+                        if self.agent.session.context_manager
+                        else {}
+                    ),
+                )
+                await persistence_manager.save_session(session_snapshot)
+                console.print(
+                    f"[success]Session saved: {self.agent.session.metrics.session_id}[/success]"
+                )
         elif cmd_name == "/sessions":
+            from friday_ai.agent.persistence import PersistenceManager
+
             persistence_manager = PersistenceManager()
-            sessions = persistence_manager.list_sessions()
+            sessions = await persistence_manager.list_sessions()
             console.print("\n[bold]Saved Sessions[/bold]")
             for s in sessions:
                 console.print(
@@ -307,8 +365,11 @@ class CLI:
             if not cmd_args:
                 console.print(f"[error]Usage: /resume <session_id> [/error]")
             else:
+                from friday_ai.agent.persistence import PersistenceManager
+                from friday_ai.agent.session import Session
+
                 persistence_manager = PersistenceManager()
-                snapshot = persistence_manager.load_session(cmd_args)
+                snapshot = await persistence_manager.load_session(cmd_args)
                 if not snapshot:
                     console.print(f"[error]Session does not exist [/error]")
                 else:
@@ -326,9 +387,7 @@ class CLI:
                         if msg.get("role") == "system":
                             continue
                         elif msg["role"] == "user":
-                            session.context_manager.add_user_message(
-                                msg.get("content", "")
-                            )
+                            session.context_manager.add_user_message(msg.get("content", ""))
                         elif msg["role"] == "assistant":
                             session.context_manager.add_assistant_message(
                                 msg.get("content", ""), msg.get("tool_calls")
@@ -338,31 +397,44 @@ class CLI:
                                 msg.get("tool_call_id", ""), msg.get("content", "")
                             )
 
-                    await self.agent.session.client.close()
-                    await self.agent.session.mcp_manager.shutdown()
+                    await self.agent.session.cleanup()
 
                     self.agent.session = session
                     console.print(
-                        f"[success]Resumed session: {session.session_id}[/success]"
+                        f"[success]Resumed session: {session.metrics.session_id}[/success]"
                     )
         elif cmd_name == "/checkpoint":
-            persistence_manager = PersistenceManager()
-            session_snapshot = SessionSnapshot(
-                session_id=self.agent.session.session_id,
-                created_at=self.agent.session.created_at,
-                updated_at=self.agent.session.updated_at,
-                turn_count=self.agent.session.turn_count,
-                messages=self.agent.session.context_manager.get_messages(),
-                total_usage=self.agent.session.context_manager.total_usage,
-            )
-            checkpoint_id = persistence_manager.save_checkpoint(session_snapshot)
-            console.print(f"[success]Checkpoint created: {checkpoint_id}[/success]")
+            if self.agent and self.agent.session:
+                from friday_ai.agent.persistence import PersistenceManager, SessionSnapshot
+
+                persistence_manager = PersistenceManager()
+                session_snapshot = SessionSnapshot(
+                    session_id=self.agent.session.metrics.session_id,
+                    created_at=self.agent.session.created_at,
+                    updated_at=self.agent.session.updated_at,
+                    turn_count=self.agent.session.metrics.turn_count,
+                    messages=(
+                        self.agent.session.context_manager.get_messages()
+                        if self.agent.session.context_manager
+                        else []
+                    ),
+                    total_usage=(
+                        self.agent.session.context_manager.total_usage
+                        if self.agent.session.context_manager
+                        else {}
+                    ),
+                )
+                checkpoint_id = await persistence_manager.save_checkpoint(session_snapshot)
+                console.print(f"[success]Checkpoint created: {checkpoint_id}[/success]")
         elif cmd_name == "/restore":
             if not cmd_args:
                 console.print(f"[error]Usage: /restore <checkpoint_id> [/error]")
             else:
+                from friday_ai.agent.persistence import PersistenceManager
+                from friday_ai.agent.session import Session
+
                 persistence_manager = PersistenceManager()
-                snapshot = persistence_manager.load_checkpoint(cmd_args)
+                snapshot = await persistence_manager.load_checkpoint(cmd_args)
                 if not snapshot:
                     console.print(f"[error]Checkpoint does not exist [/error]")
                 else:
@@ -380,9 +452,7 @@ class CLI:
                         if msg.get("role") == "system":
                             continue
                         elif msg["role"] == "user":
-                            session.context_manager.add_user_message(
-                                msg.get("content", "")
-                            )
+                            session.context_manager.add_user_message(msg.get("content", ""))
                         elif msg["role"] == "assistant":
                             session.context_manager.add_assistant_message(
                                 msg.get("content", ""), msg.get("tool_calls")
@@ -392,12 +462,11 @@ class CLI:
                                 msg.get("tool_call_id", ""), msg.get("content", "")
                             )
 
-                    await self.agent.session.client.close()
-                    await self.agent.session.mcp_manager.shutdown()
+                    await self.agent.session.cleanup()
 
                     self.agent.session = session
                     console.print(
-                        f"[success]Restored session: {session.session_id}, checkpoint: {cmd_args}[/success]"
+                        f"[success]Restored session: {session.metrics.session_id}, checkpoint: {cmd_args}[/success]"
                     )
         elif cmd_name == "/workflow":
             if not cmd_args:
@@ -448,7 +517,11 @@ class CLI:
                 if self._claude_context and self._claude_context.skills:
                     console.print("\n[bold]Available Skills[/bold]")
                     for name, skill in self._claude_context.skills.items():
-                        active = "[green]●[/green]" if name in self._claude_context.active_skills else "○"
+                        active = (
+                            "[green]●[/green]"
+                            if name in self._claude_context.active_skills
+                            else "○"
+                        )
                         console.print(f"  {active} {name}: {skill.description[:50]}...")
                     console.print("\nUse /skills <name> to activate")
                 else:
@@ -545,14 +618,18 @@ class CLI:
         console.print("\n[bold]Code Review Workflow[/bold]")
         file_path = console.input("Enter file path to review: ").strip()
         if file_path:
-            await self._process_message(f"Review the code in {file_path} for bugs, security issues, and best practices")
+            await self._process_message(
+                f"Review the code in {file_path} for bugs, security issues, and best practices"
+            )
 
     async def _workflow_refactor(self):
         """Refactoring workflow."""
         console.print("\n[bold]Refactoring Workflow[/bold]")
         file_path = console.input("Enter file path to refactor: ").strip()
         if file_path:
-            await self._process_message(f"Suggest refactoring improvements for {file_path}. Focus on readability, performance, and maintainability.")
+            await self._process_message(
+                f"Suggest refactoring improvements for {file_path}. Focus on readability, performance, and maintainability."
+            )
 
     async def _workflow_debug(self):
         """Debugging workflow."""
@@ -567,8 +644,6 @@ class CLI:
         topic = console.input("What topic do you want to learn about? ").strip()
         if topic:
             await self._process_message(f"Explain {topic} with examples from this codebase")
-
-        self._autonomous_loop: AutonomousLoop | None = None
 
     async def _start_autonomous_loop(self, args: str) -> None:
         """Start autonomous development loop.
@@ -631,6 +706,7 @@ class CLI:
             agent_initialized_here = False
             if not self.agent:
                 from friday_ai.agent.agent import Agent
+
                 self.agent = Agent(self.config)
                 await self.agent.__aenter__()
                 agent_initialized_here = True
@@ -654,6 +730,7 @@ class CLI:
         except Exception as e:
             console.print(f"\n[error]Loop error: {e}[/error]")
             import traceback
+
             console.print(f"[dim]{traceback.format_exc()}[/dim]")
 
     async def _control_loop(self, args: str) -> None:
@@ -673,9 +750,13 @@ class CLI:
             else:
                 console.print("[warning]No active loop to stop[/warning]")
         elif args == "pause":
-            console.print("[warning]Pause not yet implemented. Use /loop stop to stop the loop.[/warning]")
+            console.print(
+                "[warning]Pause not yet implemented. Use /loop stop to stop the loop.[/warning]"
+            )
         elif args == "resume":
-            console.print("[warning]Resume not yet implemented. Use /autonomous to start a new loop.[/warning]")
+            console.print(
+                "[warning]Resume not yet implemented. Use /autonomous to start a new loop.[/warning]"
+            )
         else:
             console.print(f"[error]Unknown loop command: {args}[/error]")
             console.print("Available: stop, pause, resume, status")
@@ -693,6 +774,7 @@ class CLI:
         if status_file.exists():
             try:
                 import json
+
                 status = json.loads(status_file.read_text())
                 console.print(f"  State: {status.get('state', 'unknown')}")
                 console.print(f"  Loop number: {status.get('loop_number', 0)}")
@@ -707,6 +789,7 @@ class CLI:
         if call_count_file.exists():
             try:
                 import json
+
                 data = json.loads(call_count_file.read_text())
                 calls = data.get("count", 0)
                 console.print(f"\n[yellow]Rate Limiting:[/yellow]")
@@ -732,11 +815,25 @@ class CLI:
 
         if not args or args == "status":
             if circuit_breaker:
-                state_color = "green" if circuit_breaker.state == CircuitBreakerState.CLOSED else "red" if circuit_breaker.state == CircuitBreakerState.OPEN else "yellow"
-                console.print(f"  Status: [{state_color}]{circuit_breaker.state.value.upper()}[/{state_color}]")
-                console.print(f"  No progress loops: {circuit_breaker.no_progress_count}/{self._autonomous_loop.config.max_no_progress_loops if self._autonomous_loop else 3}")
-                console.print(f"  Consecutive errors: {circuit_breaker.consecutive_error_count}/{self._autonomous_loop.config.max_consecutive_errors if self._autonomous_loop else 5}")
-                console.print(f"  Completion indicators: {circuit_breaker.completion_count}/{self._autonomous_loop.config.max_completion_indicators if self._autonomous_loop else 5}")
+                state_color = (
+                    "green"
+                    if circuit_breaker.state == CircuitBreakerState.CLOSED
+                    else "red"
+                    if circuit_breaker.state == CircuitBreakerState.OPEN
+                    else "yellow"
+                )
+                console.print(
+                    f"  Status: [{state_color}]{circuit_breaker.state.value.upper()}[/{state_color}]"
+                )
+                console.print(
+                    f"  No progress loops: {circuit_breaker.no_progress_count}/{self._autonomous_loop.config.max_no_progress_loops if self._autonomous_loop else 3}"
+                )
+                console.print(
+                    f"  Consecutive errors: {circuit_breaker.consecutive_error_count}/{self._autonomous_loop.config.max_consecutive_errors if self._autonomous_loop else 5}"
+                )
+                console.print(
+                    f"  Completion indicators: {circuit_breaker.completion_count}/{self._autonomous_loop.config.max_completion_indicators if self._autonomous_loop else 5}"
+                )
             else:
                 console.print("  Status: [green]CLOSED[/green] (normal operation)")
                 console.print("  No active loop - no circuit breaker data available")
@@ -749,6 +846,7 @@ class CLI:
         elif args == "open":
             if circuit_breaker:
                 from friday_ai.agent.autonomous_loop import CircuitBreakerState
+
                 circuit_breaker.state = CircuitBreakerState.OPEN
                 console.print("[warning]Circuit breaker manually opened[/warning]")
             else:
@@ -877,6 +975,11 @@ pytest tests/ -v
     "-m",
     help="Set AI model",
 )
+@click.option(
+    "--accessible",
+    is_flag=True,
+    help="Enable accessible UI mode (high contrast)",
+)
 @click.pass_context
 def cli(
     ctx,
@@ -886,6 +989,7 @@ def cli(
     show_config: bool,
     approval: str | None,
     model: str | None,
+    accessible: bool = False,
 ):
     """Friday AI - Your intelligent coding assistant.
 
@@ -910,8 +1014,12 @@ def cli(
             console.print(f"  Config Files:")
             user_config = Path.home() / ".config" / "ai-agent" / "config.toml"
             project_config = (cwd or Path.cwd()) / ".ai-agent" / "config.toml"
-            console.print(f"    - User: {user_config} ({'exists' if user_config.exists() else 'not found'})")
-            console.print(f"    - Project: {project_config} ({'exists' if project_config.exists() else 'not found'})")
+            console.print(
+                f"    - User: {user_config} ({'exists' if user_config.exists() else 'not found'})"
+            )
+            console.print(
+                f"    - Project: {project_config} ({'exists' if project_config.exists() else 'not found'})"
+            )
         except Exception as e:
             console.print(f"[error]Error loading config: {e}[/error]")
         ctx.exit()
@@ -930,6 +1038,8 @@ def cli(
             config.approval = ApprovalPolicy(approval)
         if model:
             config.model_name = model
+        if accessible:
+            config.accessible = True
 
         errors = config.validate()
         if errors:
@@ -969,7 +1079,7 @@ def init(cwd: Path | None):
 
     config_dir.mkdir(parents=True, exist_ok=True)
 
-    config_content = '''# Friday AI Project Configuration
+    config_content = """# Friday AI Project Configuration
 [model]
 name = "GLM-4.7"
 temperature = 1.0
@@ -989,7 +1099,7 @@ exclude_patterns = ["*KEY*", "*TOKEN*", "*SECRET*"]
 # command = "npx"
 # args = ["-y", "@modelcontextprotocol/server-filesystem", "."]
 # enabled = true
-'''
+"""
 
     config_file.write_text(config_content)
     console.print(f"[success]Created configuration at {config_file}[/success]")
@@ -1001,7 +1111,7 @@ exclude_patterns = ["*KEY*", "*TOKEN*", "*SECRET*"]
     # Create example custom tool
     example_tool = tools_dir / "example.py"
     if not example_tool.exists():
-        example_tool.write_text('''from friday_ai.tools.base import Tool, ToolInvocation, ToolKind, ToolResult
+        example_tool.write_text("""from friday_ai.tools.base import Tool, ToolInvocation, ToolKind, ToolResult
 
 class ExampleTool(Tool):
     name = "example"
@@ -1020,7 +1130,7 @@ class ExampleTool(Tool):
         params = invocation.params
         input_val = params.get("input", "")
         return ToolResult.success_result(f"Processed: {input_val}")
-''')
+""")
         console.print(f"[success]Created example tool at {example_tool}[/success]")
 
 
@@ -1090,25 +1200,34 @@ def workflow(list_all: bool):
 @click.argument("session_id", required=False)
 def resume(session_id: str | None):
     """Resume a saved session."""
+    from friday_ai.agent.agent import Agent
+    from friday_ai.agent.persistence import PersistenceManager
+    from friday_ai.agent.session import Session
+
     if not session_id:
-        # List available sessions
-        persistence_manager = PersistenceManager()
-        sessions = persistence_manager.list_sessions()
+        # List available sessions - need async wrapper
+        async def do_list():
+            persistence_manager = PersistenceManager()
+            sessions = await persistence_manager.list_sessions()
 
-        if not sessions:
-            console.print("No saved sessions found.")
-            return
+            if not sessions:
+                console.print("No saved sessions found.")
+                return None
 
-        console.print("\n[bold]Saved Sessions[/bold]")
-        for i, s in enumerate(sessions, 1):
-            console.print(f"  {i}. {s['session_id']} (turns: {s['turn_count']})")
+            console.print("\n[bold]Saved Sessions[/bold]")
+            for i, s in enumerate(sessions, 1):
+                console.print(f"  {i}. {s['session_id']} (turns: {s['turn_count']})")
 
-        # Ask user to select
-        choice = click.prompt("\nSelect session number", type=int, default=1)
-        if 1 <= choice <= len(sessions):
-            session_id = sessions[choice - 1]["session_id"]
-        else:
-            console.print("[error]Invalid selection[/error]")
+            # Ask user to select
+            choice = click.prompt("\nSelect session number", type=int, default=1)
+            if 1 <= choice <= len(sessions):
+                return sessions[choice - 1]["session_id"]
+            else:
+                console.print("[error]Invalid selection[/error]")
+                return None
+
+        session_id = asyncio.run(do_list())
+        if not session_id:
             return
 
     # Resume the session
@@ -1118,7 +1237,7 @@ def resume(session_id: str | None):
 
         async def do_resume():
             persistence_manager = PersistenceManager()
-            snapshot = persistence_manager.load_session(session_id)
+            snapshot = await persistence_manager.load_session(session_id)
 
             if not snapshot:
                 console.print(f"[error]Session not found: {session_id}[/error]")
@@ -1185,7 +1304,18 @@ def resume(session_id: str | None):
     default=None,
     help="Resume a previous session",
 )
-def main(prompt: str | None, cwd: Path | None, version: bool, resume: str | None):
+@click.option(
+    "--accessible",
+    is_flag=True,
+    help="Enable accessible UI mode (high contrast)",
+)
+def main(
+    prompt: str | None,
+    cwd: Path | None,
+    version: bool,
+    resume: str | None,
+    accessible: bool = False,
+):
     """Friday AI - Your intelligent coding assistant."""
     if version:
         console.print(f"Friday AI Teammate v{__version__}")
@@ -1196,8 +1326,11 @@ def main(prompt: str | None, cwd: Path | None, version: bool, resume: str | None
         from friday_ai.agent.persistence import PersistenceManager
         from friday_ai.agent.session import Session
 
-        persistence_manager = PersistenceManager()
-        snapshot = persistence_manager.load_session(resume)
+        async def do_load_snapshot():
+            persistence_manager = PersistenceManager()
+            return await persistence_manager.load_session(resume)
+
+        snapshot = asyncio.run(do_load_snapshot())
 
         if not snapshot:
             console.print(f"[error]Session not found: {resume}[/error]")

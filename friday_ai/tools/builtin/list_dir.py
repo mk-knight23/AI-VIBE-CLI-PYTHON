@@ -1,7 +1,9 @@
+from pathlib import Path
 from friday_ai.tools.base import Tool, ToolInvocation, ToolKind, ToolResult
 from pydantic import BaseModel, Field
 
 from friday_ai.utils.paths import resolve_path
+from friday_ai.cache.cache import ttl_cache
 
 
 class ListDirParams(BaseModel):
@@ -20,6 +22,11 @@ class ListDirTool(Tool):
     kind = ToolKind.READ
     schema = ListDirParams
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Cache for directory listings with 30 second TTL
+        self._list_cache = ttl_cache(maxsize=256, ttl=30)
+
     async def execute(self, invocation: ToolInvocation) -> ToolResult:
         params = ListDirParams(**invocation.params)
 
@@ -29,8 +36,9 @@ class ListDirTool(Tool):
             return ToolResult.error_result(f"Directory does not exist: {dir_path}")
 
         try:
-            items = sorted(
-                dir_path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())
+            items = self._get_directory_items(
+                str(dir_path),
+                params.include_hidden
             )
         except Exception as e:
             return ToolResult.error_result(f"Error listing directory: {e}")
@@ -58,3 +66,56 @@ class ListDirTool(Tool):
                 "entries": len(items),
             },
         )
+
+    def _get_directory_items(
+        self,
+        dir_path: str,
+        include_hidden: bool
+    ) -> list[Path]:
+        """Get directory items with caching.
+
+        Args:
+            dir_path: Directory path
+            include_hidden: Whether to include hidden files
+
+        Returns:
+            Sorted list of directory items
+        """
+        # Check modification time for cache invalidation
+        path_obj = Path(dir_path)
+        if not path_obj.exists():
+            return []
+
+        try:
+            mtime = path_obj.stat().st_mtime
+        except Exception:
+            mtime = 0
+
+        # Use cached result if directory hasn't been modified
+        return self._perform_list_dir(dir_path, include_hidden, mtime)
+
+    @staticmethod
+    @ttl_cache(maxsize=512, ttl=30)
+    def _perform_list_dir(
+        dir_path: str,
+        include_hidden: bool,
+        mtime: float
+    ) -> list[Path]:
+        """Perform the actual directory listing (cached).
+
+        Args:
+            dir_path: Directory path to list
+            include_hidden: Whether to include hidden files
+            mtime: Modification time for cache invalidation
+
+        Returns:
+            Sorted list of directory items
+        """
+        path_obj = Path(dir_path)
+        try:
+            return sorted(
+                path_obj.iterdir(),
+                key=lambda p: (not p.is_dir(), p.name.lower())
+            )
+        except Exception:
+            return []

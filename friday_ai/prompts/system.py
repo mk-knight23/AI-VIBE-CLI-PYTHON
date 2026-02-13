@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import platform
 from friday_ai.config.config import Config
 from friday_ai.tools.base import Tool
@@ -27,13 +27,13 @@ def get_system_prompt(
     parts.append(_get_security_section())
 
     # .claude folder integration - active skills
-    if claude_context and hasattr(claude_context, 'format_skills_for_prompt'):
+    if claude_context and hasattr(claude_context, "format_skills_for_prompt"):
         skills_section = claude_context.format_skills_for_prompt()
         if skills_section:
             parts.append(skills_section)
 
     # .claude folder integration - active rules
-    if claude_context and hasattr(claude_context, 'format_rules_for_prompt'):
+    if claude_context and hasattr(claude_context, "format_rules_for_prompt"):
         rules_section = claude_context.format_rules_for_prompt()
         if rules_section:
             parts.append(rules_section)
@@ -69,7 +69,7 @@ You are pair programming with the user to help them accomplish their goals. You 
 
 def _get_environment_section(config: Config) -> str:
     """Generate the environment section."""
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     os_info = f"{platform.system()} {platform.release()}"
 
     return f"""# Environment

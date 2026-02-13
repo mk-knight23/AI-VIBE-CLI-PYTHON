@@ -5,17 +5,17 @@ Provides scheduled execution of tasks and utilities.
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Optional, TYPE_CHECKING, Awaitable, Coroutine
 
 from friday_ai.config.config import Config
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from typing import Coroutine, Callable
+    from collections.abc import Coroutine, Callable, Awaitable
 else:
-    from collections.abc import Callable
+    from collections.abc import Callable, Awaitable
 
 TaskCallback = Callable[..., Awaitable[Any]]
 Coroutine = TaskCallback
@@ -27,7 +27,7 @@ class ScheduledTask:
     def __init__(
         self,
         name: str,
-        coro: Coroutine,
+        coro: Callable[..., Awaitable[Any]],
         schedule_time: datetime,
         args: tuple[Any, ...] = (),
         periodic: bool = False,
@@ -37,7 +37,7 @@ class ScheduledTask:
 
         Args:
             name: Task name
-            coro: Coroutine to execute
+            coro: Coroutine function to execute
             schedule_time: When to execute
             args: Arguments for coroutine
             periodic: Whether this is a periodic task
@@ -49,6 +49,7 @@ class ScheduledTask:
         self.args = args
         self.periodic = periodic
         self.period = period
+        self.task: Optional[asyncio.Task] = None
 
         if periodic and period:
             if not period:
@@ -85,32 +86,50 @@ class Scheduler:
             raise ValueError("Period required for periodic tasks")
 
         self.tasks.append(task)
-        task.task = asyncio.create_task(task.coro, *task.args)
+        logger.info(f"Scheduled task '{task.name}' for {task.schedule_time}")
 
     async def start(self) -> None:
         """Start the scheduler."""
+        if self.running:
+            return
+
         self.running = True
+        logger.info("Scheduler started")
 
-        while self.tasks:
-            now = datetime.now()
+        try:
+            while self.running and self.tasks:
+                now = datetime.now()
 
-            due_tasks = [t for t in self.tasks if t.schedule_time <= now]
+                # Find due tasks
+                due_tasks = [t for t in self.tasks if t.schedule_time <= now]
 
-            if not due_tasks:
-                await asyncio.sleep(1)  # No tasks due yet
+                for task in due_tasks:
+                    # Run task as background task
+                    asyncio.create_task(self._run_task(task))
 
-            for task in due_tasks:
-                if task.periodic and task.periodic:
-                    # Schedule next execution
-                    next_run = task.schedule_time + task.period
-                    while next_run <= now:
-                        await asyncio.sleep(1)
+                    if task.periodic and task.period:
+                        # Reschedule
+                        task.schedule_time = now + task.period
+                        logger.debug(
+                            f"Rescheduled periodic task '{task.name}' for {task.schedule_time}"
+                        )
+                    else:
+                        # Remove one-off task
+                        self.tasks.remove(task)
 
-                # Run task
-                await asyncio.create_task(task.coro, *task.args)
+                await asyncio.sleep(1)
+        finally:
+            self.running = False
+            logger.info("Scheduler stopped")
 
-                # Calculate next run time
-                if task.periodic:
-                    task.schedule_time = task.schedule_time + task.period
+    async def _run_task(self, task: ScheduledTask) -> None:
+        """Run a single task with error handling."""
+        try:
+            logger.debug(f"Executing task '{task.name}'")
+            await task.run()
+        except Exception as e:
+            logger.error(f"Error executing task '{task.name}': {e}")
 
+    async def stop(self) -> None:
+        """Stop the scheduler."""
         self.running = False

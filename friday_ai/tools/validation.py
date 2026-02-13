@@ -34,9 +34,7 @@ def validate_tool_metadata(tool: Tool) -> None:
     # Check if tool has a name
     if not hasattr(tool, "name") or not tool.name:
         raise ToolValidationError(
-            getattr(tool, "name", "unknown"),
-            "Tool missing 'name' attribute",
-            {"tool": str(tool)}
+            getattr(tool, "name", "unknown"), "Tool missing 'name' attribute", {"tool": str(tool)}
         )
 
     # Check if tool has a description
@@ -44,15 +42,20 @@ def validate_tool_metadata(tool: Tool) -> None:
         raise ToolValidationError(
             tool.name,
             "Missing or empty description",
-            {"field": "description", "value": getattr(tool, "description", None)}
+            {"field": "description", "value": getattr(tool, "description", None)},
         )
 
     # Check if tool has a schema
-    if not hasattr(tool, "schema") or tool.schema is None:
+    try:
+        if not hasattr(tool, "schema") or tool.schema is None:
+            raise ToolValidationError(
+                tool.name, "Tool missing 'schema' attribute", {"field": "schema"}
+            )
+    except NotImplementedError:
         raise ToolValidationError(
             tool.name,
-            "Tool missing 'schema' attribute",
-            {"field": "schema"}
+            "Tool schema not implemented",
+            {"field": "schema", "error": "NotImplementedError"},
         )
 
 
@@ -69,9 +72,7 @@ def validate_tool_schema(tool: Tool) -> None:
         schema = tool.to_openai_schema()
     except Exception as e:
         raise ToolValidationError(
-            tool.name,
-            f"Schema generation failed: {str(e)}",
-            {"exception": str(e)}
+            tool.name, f"Schema generation failed: {str(e)}", {"exception": str(e)}
         )
 
     # Validate schema structure
@@ -81,5 +82,5 @@ def validate_tool_schema(tool: Tool) -> None:
             raise ToolValidationError(
                 tool.name,
                 f"Schema missing required field: {field}",
-                {"schema": schema, "missing_field": field}
+                {"schema": schema, "missing_field": field},
             )

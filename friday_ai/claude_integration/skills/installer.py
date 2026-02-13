@@ -10,7 +10,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 from friday_ai.claude_integration.skills.registry import (
@@ -122,7 +122,7 @@ class SkillInstaller:
             # Save installation info
             self._installed_skills[skill_name] = {
                 "version": version,
-                "installed_at": datetime.utcnow().isoformat(),
+                "installed_at": datetime.now(timezone.utc).isoformat(),
                 "download_url": skill_version.download_url,
                 "checksum": await self._compute_checksum(version_path),
                 "metadata": {

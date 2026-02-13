@@ -6,14 +6,17 @@ checksum verification, and log rotation.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
-import json
 import logging
-from datetime import datetime, timedelta
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Any
-from dataclasses import dataclass, asdict
+
+import aiofiles
+import orjson
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +72,7 @@ class AuditRecord:
         trace_id: str | None = None,
     ) -> AuditRecord:
         """Create a new audit record."""
-        timestamp = datetime.utcnow().isoformat() + "Z"
+        timestamp = datetime.now(UTC).isoformat()
         event_type_str = event_type.value if isinstance(event_type, AuditEventType) else event_type
 
         # Create record without checksum first
@@ -113,6 +116,7 @@ class AuditLogger:
     - Automatic log rotation
     - Async logging support
     - Log retention policies
+    - Async I/O with aiofiles for high performance
 
     Example:
         audit = AuditLogger()
@@ -130,6 +134,7 @@ class AuditLogger:
         max_file_size: int = 10 * 1024 * 1024,  # 10MB
         max_files: int = 10,
         retention_days: int = 90,
+        buffer_size: int = 100,  # Increased buffer size for better throughput
     ):
         self.log_dir = Path(log_dir).expanduser()
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -138,14 +143,16 @@ class AuditLogger:
         self.retention_days = retention_days
         self._current_file: Path | None = None
         self._buffer: list[AuditRecord] = []
-        self._buffer_size = 10
+        self._buffer_size = buffer_size
+        self._write_lock = asyncio.Lock()
+        self._flush_task: asyncio.Task[None] | None = None
 
     @staticmethod
     def _calculate_checksum(data: dict[str, Any]) -> str:
         """Calculate SHA256 checksum for record."""
-        # Create canonical JSON representation
-        canonical = json.dumps(data, sort_keys=True, separators=(",", ":"))
-        return hashlib.sha256(canonical.encode()).hexdigest()[:32]
+        # Create canonical JSON representation using orjson
+        canonical = orjson.dumps(data, option=orjson.OPT_SORT_KEYS)
+        return hashlib.sha256(canonical).hexdigest()[:32]
 
     def _get_current_log_file(self) -> Path:
         """Get current log file, rotating if necessary."""
@@ -158,7 +165,7 @@ class AuditLogger:
         self._rotate_logs()
 
         # Create new log file
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         self._current_file = self.log_dir / f"audit_{timestamp}.log"
         return self._current_file
 
@@ -177,7 +184,7 @@ class AuditLogger:
 
     def _cleanup_old_logs(self) -> None:
         """Remove logs older than retention period."""
-        cutoff = datetime.now() - timedelta(days=self.retention_days)
+        cutoff = datetime.now(UTC) - timedelta(days=self.retention_days)
 
         for log_file in self.log_dir.glob("audit_*.log"):
             try:
@@ -231,23 +238,28 @@ class AuditLogger:
         return record
 
     async def flush(self) -> None:
-        """Flush buffered records to disk."""
-        if not self._buffer:
-            return
+        """Flush buffered records to disk using async I/O."""
+        async with self._write_lock:
+            if not self._buffer:
+                return
 
-        log_file = self._get_current_log_file()
+            log_file = self._get_current_log_file()
 
-        try:
-            with open(log_file, "a") as f:
-                for record in self._buffer:
-                    f.write(json.dumps(record.to_dict()) + "\n")
+            try:
+                # Batch write all records using aiofiles
+                lines = [orjson.dumps(record.to_dict()) for record in self._buffer]
+                content = b"\n".join(lines) + b"\n"
 
-            self._buffer.clear()
-            logger.debug(f"Flushed {len(self._buffer)} audit records to {log_file}")
+                async with aiofiles.open(log_file, "ab") as f:
+                    await f.write(content)
 
-        except OSError as e:
-            logger.error(f"Failed to write audit log: {e}")
-            # Don't clear buffer on failure - will retry
+                count = len(self._buffer)
+                self._buffer.clear()
+                logger.debug(f"Flushed {count} audit records to {log_file}")
+
+            except OSError as e:
+                logger.error(f"Failed to write audit log: {e}")
+                # Don't clear buffer on failure - will retry
 
     async def log_tool_execution(
         self,
@@ -424,13 +436,13 @@ class AuditLogger:
 
         return redacted
 
-    def get_recent_events(
+    async def get_recent_events(
         self,
         event_type: AuditEventType | str | None = None,
         limit: int = 100,
         since: datetime | None = None,
     ) -> list[AuditRecord]:
-        """Get recent audit events.
+        """Get recent audit events using async I/O.
 
         Args:
             event_type: Filter by event type
@@ -448,14 +460,17 @@ class AuditLogger:
 
         for log_file in log_files:
             try:
-                with open(log_file) as f:
-                    for line in reversed(f.readlines()):
+                async with aiofiles.open(log_file, "rb") as f:
+                    content = await f.read()
+                    lines = content.split(b"\n")
+
+                    for line in reversed(lines):
                         line = line.strip()
                         if not line:
                             continue
 
                         try:
-                            data = json.loads(line)
+                            data = orjson.loads(line)
                             record = AuditRecord(**data)
 
                             # Verify integrity
@@ -478,7 +493,7 @@ class AuditLogger:
                             if len(records) >= limit:
                                 return records
 
-                        except (json.JSONDecodeError, TypeError) as e:
+                        except (orjson.JSONDecodeError, TypeError) as e:
                             logger.warning(f"Failed to parse audit record: {e}")
                             continue
 
@@ -488,8 +503,8 @@ class AuditLogger:
 
         return records
 
-    def verify_log_integrity(self, log_file: Path | None = None) -> tuple[bool, list[str]]:
-        """Verify integrity of audit logs.
+    async def verify_log_integrity(self, log_file: Path | None = None) -> tuple[bool, list[str]]:
+        """Verify integrity of audit logs using async I/O.
 
         Args:
             log_file: Specific file to verify, or all files if None
@@ -505,20 +520,23 @@ class AuditLogger:
                 continue
 
             try:
-                with open(file_path) as f:
-                    for line_num, line in enumerate(f, 1):
+                async with aiofiles.open(file_path, "rb") as f:
+                    content = await f.read()
+                    lines = content.split(b"\n")
+
+                    for line_num, line in enumerate(lines, 1):
                         line = line.strip()
                         if not line:
                             continue
 
                         try:
-                            data = json.loads(line)
+                            data = orjson.loads(line)
                             record = AuditRecord(**data)
 
                             if not record.verify():
                                 tampered.append(f"{file_path}:{line_num}")
 
-                        except (json.JSONDecodeError, TypeError):
+                        except (orjson.JSONDecodeError, TypeError):
                             tampered.append(f"{file_path}:{line_num} (parse error)")
 
             except OSError as e:

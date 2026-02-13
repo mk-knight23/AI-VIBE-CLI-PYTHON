@@ -45,13 +45,41 @@ AGENT_THEME = Theme(
     }
 )
 
+ACCESSIBLE_THEME = Theme(
+    {
+        # General - Using high contrast colors, avoiding green/red confusion
+        "info": "bright_cyan bold",
+        "warning": "bright_yellow bold",
+        "error": "bright_white on red bold",
+        "success": "bright_white on blue bold",
+        "dim": "bright_white",
+        "muted": "bright_white",
+        "border": "white",
+        "highlight": "yellow bold underline",
+        # Roles
+        "user": "bright_blue bold underline",
+        "assistant": "bright_white bold",
+        # Tools - High contrast
+        "tool": "bright_white bold reverse",
+        "tool.read": "bright_cyan",
+        "tool.write": "bright_yellow",
+        "tool.shell": "bright_magenta",
+        "tool.network": "bright_blue",
+        "tool.memory": "bright_white",
+        "tool.mcp": "bright_cyan",
+        # Code / blocks
+        "code": "bright_white",
+    }
+)
+
 _console: Console | None = None
 
 
-def get_console() -> Console:
+def get_console(accessible: bool = False) -> Console:
     global _console
     if _console is None:
-        _console = Console(theme=AGENT_THEME, highlight=False)
+        theme = ACCESSIBLE_THEME if accessible else AGENT_THEME
+        _console = Console(theme=theme, highlight=False)
 
     return _console
 
@@ -62,10 +90,10 @@ class TUI:
         config: Config,
         console: Console | None = None,
     ) -> None:
-        self.console = console or get_console()
+        self.config = config
+        self.console = console or get_console(accessible=config.accessible)
         self._assistant_stream_open = False
         self._tool_args_by_call_id: dict[str, dict[str, Any]] = {}
-        self.config = config
         self.cwd = self.config.cwd
         self._max_block_tokens = 2500
 
@@ -291,9 +319,7 @@ class TUI:
                 header_parts.append(" • ")
 
                 if shown_start and shown_end and total_lines:
-                    header_parts.append(
-                        f"lines {shown_start}-{shown_end} of {total_lines}"
-                    )
+                    header_parts.append(f"lines {shown_start}-{shown_end} of {total_lines}")
 
                 header = "".join(header_parts)
                 blocks.append(Text(header, style="muted"))
@@ -397,9 +423,7 @@ class TUI:
             if summary:
                 blocks.append(Text(" • ".join(summary), style="muted"))
 
-            output_display = truncate_text(
-                output, self.config.model_name, self._max_block_tokens
-            )
+            output_display = truncate_text(output, self.config.model_name, self._max_block_tokens)
             blocks.append(
                 Syntax(
                     output_display,
@@ -524,9 +548,7 @@ class TUI:
             if error and not success:
                 blocks.append(Text(error, style="error"))
 
-            output_display = truncate_text(
-                output, self.config.model_name, self._max_block_tokens
-            )
+            output_display = truncate_text(output, self.config.model_name, self._max_block_tokens)
             if output_display.strip():
                 blocks.append(
                     Syntax(
@@ -589,9 +611,7 @@ class TUI:
             )
         )
 
-        response = Prompt.ask(
-            "\nApprove?", choices=["y", "n", "yes", "no"], default="n"
-        )
+        response = Prompt.ask("\nApprove?", choices=["y", "n", "yes", "no"], default="n")
 
         return response.lower() in {"y", "yes"}
 

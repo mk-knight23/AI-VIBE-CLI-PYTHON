@@ -8,6 +8,8 @@ This module provides integration with the .claude folder structure, enabling:
 - Slash command mapping from .claude/commands/
 """
 
+from typing import TYPE_CHECKING
+
 from friday_ai.claude_integration.utils import (
     ensure_claude_structure,
     find_claude_dir,
@@ -15,12 +17,27 @@ from friday_ai.claude_integration.utils import (
     parse_frontmatter,
 )
 
+if TYPE_CHECKING:
+    from friday_ai.claude_integration.agent_loader import ClaudeAgentLoader
+    from friday_ai.claude_integration.command_mapper import CommandMapper
+    from friday_ai.claude_integration.context import ClaudeContext
+    from friday_ai.claude_integration.rules_engine import RulesEngine
+    from friday_ai.claude_integration.skills_manager import SkillsManager
+    from friday_ai.claude_integration.workflow_engine import WorkflowEngine
+
 __all__ = [
     "find_claude_dir",
     "parse_frontmatter",
     "load_markdown_file",
     "ensure_claude_structure",
+    "ClaudeAgentLoader",
+    "SkillsManager",
+    "RulesEngine",
+    "WorkflowEngine",
+    "CommandMapper",
+    "ClaudeContext",
 ]
+
 
 # Lazy imports for components that may not be needed immediately
 def __getattr__(name: str):

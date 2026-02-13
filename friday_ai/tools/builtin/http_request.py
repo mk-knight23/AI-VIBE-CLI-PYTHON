@@ -1,15 +1,14 @@
-import asyncio
 import json
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field
-from typing import Literal, Any
-from urllib.parse import urljoin
+from typing import Any, Literal
 
 import httpx
+from pydantic import BaseModel, Field
 
-from friday_ai.tools.base import Tool, ToolConfirmation, ToolInvocation, ToolKind, ToolResult
 from friday_ai.resilience.retry import with_retry
+from friday_ai.tools.base import Tool, ToolConfirmation, ToolInvocation, ToolKind, ToolResult
+from friday_ai.tools.builtin.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -92,63 +91,67 @@ Examples:
             content = params.body.encode('utf-8')
 
         try:
-            async with httpx.AsyncClient(
-                timeout=params.timeout,
-                follow_redirects=params.follow_redirects
-            ) as client:
-                response = await client.request(
-                    method=params.method,
-                    url=params.url,
-                    headers=headers,
-                    params=params.params,
-                    content=content,
-                )
+            # Use shared HTTP client with connection pooling
+            client = await get_http_client()
 
-                # Format response
-                output_lines = [
-                    f"Status: {response.status_code} {response.reason_phrase}",
-                    f"URL: {response.url}",
-                    f"Time: {response.elapsed.total_seconds():.3f}s",
-                    "",
-                    "Headers:",
-                ]
+            # Create request with timeout included
+            timeout = httpx.Timeout(params.timeout)
+            request = client.build_request(
+                method=params.method,
+                url=params.url,
+                headers=headers,
+                params=params.params,
+                content=content,
+                timeout=timeout,
+            )
 
-                for name, value in response.headers.items():
-                    output_lines.append(f"  {name}: {value}")
+            response = await client.send(request, follow_redirects=params.follow_redirects)
 
-                output_lines.append("")
-                output_lines.append("Body:")
+            # Format response
+            output_lines = [
+                f"Status: {response.status_code} {response.reason_phrase}",
+                f"URL: {response.url}",
+                f"Time: {response.elapsed.total_seconds():.3f}s",
+                "",
+                "Headers:",
+            ]
 
-                # Format body based on content type
-                body = response.text
-                content_type = response.headers.get('content-type', '')
+            for name, value in response.headers.items():
+                output_lines.append(f"  {name}: {value}")
 
-                # Truncate if too large
-                if len(body) > params.max_response_size:
-                    body = body[:params.max_response_size] + "\n... [response truncated]"
+            output_lines.append("")
+            output_lines.append("Body:")
 
-                if 'application/json' in content_type:
-                    try:
-                        parsed = response.json()
-                        formatted = json.dumps(parsed, indent=2)
-                        output_lines.append(formatted)
-                    except:
-                        output_lines.append(body)
-                else:
+            # Format body based on content type
+            body = response.text
+            content_type = response.headers.get('content-type', '')
+
+            # Truncate if too large
+            if len(body) > params.max_response_size:
+                body = body[:params.max_response_size] + "\n... [response truncated]"
+
+            if 'application/json' in content_type:
+                try:
+                    parsed = response.json()
+                    formatted = json.dumps(parsed, indent=2)
+                    output_lines.append(formatted)
+                except (json.JSONDecodeError, ValueError, TypeError):
                     output_lines.append(body)
+            else:
+                output_lines.append(body)
 
-                output = "\n".join(output_lines)
+            output = "\n".join(output_lines)
 
-                return ToolResult(
-                    success=200 <= response.status_code < 300,
-                    output=output,
-                    error=None if response.status_code < 400 else f"HTTP {response.status_code}",
-                    metadata={
-                        "status_code": response.status_code,
-                        "content_type": content_type,
-                        "size": len(response.content),
-                    }
-                )
+            return ToolResult(
+                success=200 <= response.status_code < 300,
+                output=output,
+                error=None if response.status_code < 400 else f"HTTP {response.status_code}",
+                metadata={
+                    "status_code": response.status_code,
+                    "content_type": content_type,
+                    "size": len(response.content),
+                }
+            )
 
         except httpx.TimeoutException:
             return ToolResult.error_result(f"Request timed out after {params.timeout}s")
@@ -197,31 +200,36 @@ Example:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            async with httpx.AsyncClient(timeout=params.timeout) as client:
-                async with client.stream("GET", params.url, follow_redirects=True) as response:
-                    if response.status_code != 200:
-                        return ToolResult.error_result(
-                            f"Download failed with status {response.status_code}"
-                        )
+            # Use shared HTTP client with connection pooling
+            client = await get_http_client()
 
-                    total_size = 0
-                    chunk_size = 8192
+            # Create request-specific timeout
+            timeout = httpx.Timeout(params.timeout)
 
-                    with open(output_path, 'wb') as f:
-                        async for chunk in response.aiter_bytes(chunk_size=chunk_size):
-                            f.write(chunk)
-                            total_size += len(chunk)
-
-                    content_type = response.headers.get('content-type', 'unknown')
-                    return ToolResult.success_result(
-                        f"Downloaded {total_size:,} bytes to {output_path}\n"
-                        f"Content-Type: {content_type}",
-                        metadata={
-                            "size": total_size,
-                            "path": str(output_path),
-                            "content_type": content_type,
-                        }
+            async with client.stream("GET", params.url, timeout=timeout, follow_redirects=True) as response:
+                if response.status_code != 200:
+                    return ToolResult.error_result(
+                        f"Download failed with status {response.status_code}"
                     )
+
+                total_size = 0
+                chunk_size = 8192
+
+                with open(output_path, 'wb') as f:
+                    async for chunk in response.aiter_bytes(chunk_size=chunk_size):
+                        f.write(chunk)
+                        total_size += len(chunk)
+
+                content_type = response.headers.get('content-type', 'unknown')
+                return ToolResult.success_result(
+                    f"Downloaded {total_size:,} bytes to {output_path}\n"
+                    f"Content-Type: {content_type}",
+                    metadata={
+                        "size": total_size,
+                        "path": str(output_path),
+                        "content_type": content_type,
+                    }
+                )
 
         except httpx.TimeoutException:
             return ToolResult.error_result(f"Download timed out after {params.timeout}s")

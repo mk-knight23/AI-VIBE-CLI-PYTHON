@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -51,11 +51,11 @@ class Session:
     @property
     def is_expired(self) -> bool:
         """Check if session has expired (default 24 hour timeout)."""
-        return (datetime.now() - self.last_activity) >= timedelta(hours=24)
+        return (datetime.now(timezone.utc) - self.last_activity) >= timedelta(hours=24)
 
     def is_expired_with_timeout(self, timeout_hours: int) -> bool:
         """Check if session has expired with custom timeout."""
-        return (datetime.now() - self.last_activity) >= timedelta(hours=timeout_hours)
+        return (datetime.now(timezone.utc) - self.last_activity) >= timedelta(hours=timeout_hours)
 
     @property
     def duration(self) -> timedelta:
@@ -66,12 +66,12 @@ class Session:
         """Add an event to the session."""
         event = SessionEvent(
             event_type=event_type,
-            timestamp=datetime.now(),
+            timestamp=datetime.now(timezone.utc),
             reason=reason,
             metadata=metadata,
         )
         self.events.append(event)
-        self.last_activity = datetime.now()
+        self.last_activity = datetime.now(timezone.utc)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert session to dictionary."""
@@ -134,8 +134,8 @@ class SessionManager:
 
         session = Session(
             session_id=session_id,
-            created_at=datetime.now(),
-            last_activity=datetime.now(),
+            created_at=datetime.now(timezone.utc),
+            last_activity=datetime.now(timezone.utc),
             metadata=metadata,
         )
 
@@ -295,7 +295,7 @@ class SessionManager:
         Returns:
             A unique session ID.
         """
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         import random
         suffix = random.randint(1000, 9999)
         return f"session_{timestamp}_{suffix}"
@@ -393,7 +393,7 @@ class SessionManager:
         entry = {
             "session_id": session.session_id,
             "action": action,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "details": details,
         }
 

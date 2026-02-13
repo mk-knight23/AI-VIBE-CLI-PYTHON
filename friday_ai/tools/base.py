@@ -148,9 +148,7 @@ class Tool(abc.ABC):
             ToolKind.MEMORY,
         }
 
-    async def get_confirmation(
-        self, invocation: ToolInvocation
-    ) -> ToolConfirmation | None:
+    async def get_confirmation(self, invocation: ToolInvocation) -> ToolConfirmation | None:
         if not self.is_mutating(invocation.params):
             return None
 
@@ -164,10 +162,10 @@ class Tool(abc.ABC):
         schema = self.schema
 
         if isinstance(schema, type) and issubclass(schema, BaseModel):
-
             json_schema = model_json_schema(schema, mode="serialization")
 
             return {
+                "type": "function",
                 "name": self.name,
                 "description": self.description,
                 "parameters": {
@@ -179,6 +177,7 @@ class Tool(abc.ABC):
 
         if isinstance(schema, dict):
             result = {
+                "type": "function",
                 "name": self.name,
                 "description": self.description,
             }

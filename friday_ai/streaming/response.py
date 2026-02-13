@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, AsyncGenerator, Callable
 
@@ -36,7 +36,7 @@ class StreamEvent:
     type: StreamEventType
     content: str
     metadata: dict[str, Any] = field(default_factory=dict)
-    timestamp: datetime = field(default_factory=datetime.now)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class StreamProgress:
@@ -52,7 +52,7 @@ class StreamProgress:
         self.current = 0
         self.percentage = 0.0
         self.eta_seconds: float | None = None
-        self.started_at = datetime.now()
+        self.started_at = datetime.now(timezone.utc)
 
     def update(self, increment: int = 1) -> None:
         """Update progress.
@@ -67,7 +67,7 @@ class StreamProgress:
 
         # Calculate ETA
         if self.total and self.current > 0:
-            elapsed = (datetime.now() - self.started_at).total_seconds()
+            elapsed = (datetime.now(timezone.utc) - self.started_at).total_seconds()
             rate = self.current / elapsed
             if rate > 0:
                 self.eta_seconds = (self.total - self.current) / rate
@@ -147,7 +147,7 @@ class StreamingResponse:
                     content="",
                     metadata={
                         "total_tokens": self._progress.current,
-                        "duration": (datetime.now() - self._progress.started_at).total_seconds(),
+                        "duration": (datetime.now(timezone.utc) - self._progress.started_at).total_seconds(),
                     },
                 )
 

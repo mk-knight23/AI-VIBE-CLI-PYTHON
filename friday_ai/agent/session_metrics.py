@@ -1,7 +1,7 @@
 """Session Metrics - Tracks session statistics and performance metrics."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -28,8 +28,8 @@ class SessionMetrics:
             session_id: Unique session identifier
         """
         self.session_id = session_id
-        self.created_at = datetime.now()
-        self.updated_at = datetime.now()
+        self.created_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
 
         # Counters
         self.turn_count = 0
@@ -52,7 +52,7 @@ class SessionMetrics:
             New turn count
         """
         self.turn_count += 1
-        self.updated_at = datetime.now()
+        self.updated_at = datetime.now(timezone.utc)
         logger.debug(f"Turn incremented to {self.turn_count}")
         return self.turn_count
 
@@ -64,7 +64,7 @@ class SessionMetrics:
         """
         self.tools_used.add(tool_name)
         self.tool_call_count += 1
-        self.updated_at = datetime.now()
+        self.updated_at = datetime.now(timezone.utc)
         logger.debug(f"Tool usage recorded: {tool_name}")
 
     def get_stats(self) -> dict[str, Any]:
@@ -85,7 +85,7 @@ class SessionMetrics:
             "total_tokens_used": self.total_tokens_used,
             "total_tokens_cached": self.total_tokens_cached,
             "session_duration_seconds": (
-                datetime.now() - self.created_at
+                datetime.now(timezone.utc) - self.created_at
             ).total_seconds(),
         }
 
@@ -95,7 +95,7 @@ class SessionMetrics:
         Returns:
             Formatted summary string
         """
-        duration = datetime.now() - self.created_at
+        duration = datetime.now(timezone.utc) - self.created_at
         minutes = int(duration.total_seconds() / 60)
 
         return (

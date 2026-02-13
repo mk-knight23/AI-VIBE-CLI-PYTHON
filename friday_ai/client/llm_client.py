@@ -1,7 +1,8 @@
 import asyncio
 from typing import Any, AsyncGenerator
-from openai import APIConnectionError, APIError, AsyncOpenAI, RateLimitError
 
+# Lazy imports for heavy openai library
+# Imported in get_client() to avoid slow startup
 from friday_ai.client.response import (
     StreamEventType,
     StreamEvent,
@@ -16,11 +17,13 @@ from friday_ai.config.config import Config
 
 class LLMClient:
     def __init__(self, config: Config) -> None:
-        self._client: AsyncOpenAI | None = None
+        self._client: Any | None = None  # AsyncOpenAI | None - lazy import
         self._max_retries: int = 3
         self.config = config
 
-    def get_client(self) -> AsyncOpenAI:
+    def get_client(self) -> Any:  # AsyncOpenAI
+        from openai import AsyncOpenAI
+
         if self._client is None:
             self._client = AsyncOpenAI(
                 api_key=self.config.api_key,
@@ -58,6 +61,8 @@ class LLMClient:
         tools: list[dict[str, Any]] | None = None,
         stream: bool = True,
     ) -> AsyncGenerator[StreamEvent, None]:
+        from openai import APIConnectionError, APIError, RateLimitError
+
         client = self.get_client()
 
         kwargs = {
@@ -108,7 +113,7 @@ class LLMClient:
 
     async def _stream_response(
         self,
-        client: AsyncOpenAI,
+        client: Any,  # AsyncOpenAI
         kwargs: dict[str, Any],
     ) -> AsyncGenerator[StreamEvent, None]:
         response = await client.chat.completions.create(**kwargs)
@@ -201,7 +206,7 @@ class LLMClient:
 
     async def _non_stream_response(
         self,
-        client: AsyncOpenAI,
+        client: Any,  # AsyncOpenAI
         kwargs: dict[str, Any],
     ) -> StreamEvent:
         response = await client.chat.completions.create(**kwargs)

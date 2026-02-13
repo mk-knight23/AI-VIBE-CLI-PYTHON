@@ -2,11 +2,12 @@
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 
 from friday_ai.api.dependencies import get_redis_backend
 from friday_ai.api.models.responses import HealthResponse
 from friday_ai.database.redis_backend import RedisSessionBackend
+from friday_ai.utils.errors import DependencyError
 
 router = APIRouter()
 
@@ -51,12 +52,11 @@ async def readiness_check(
         all_healthy = False
 
     if not all_healthy:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "status": "not_ready",
-                "components": components,
-            },
+        # Raise dependency error for unhealthy components
+        unhealthy = [name for name, status in components.items() if "unhealthy" in status]
+        raise DependencyError(
+            message=f"Service not ready: {', '.join(unhealthy)}",
+            dependency=", ".join(unhealthy),
         )
 
     return HealthResponse(

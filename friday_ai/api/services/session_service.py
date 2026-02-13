@@ -1,7 +1,7 @@
 """Session service for API."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from friday_ai.database.redis_backend import RedisSessionBackend, SessionData
@@ -23,7 +23,7 @@ class SessionService:
         session = SessionData(
             id=str(uuid.uuid4()),
             user_id=user_id,
-            name=name or f"Session {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}",
+            name=name or f"Session {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}",
             metadata=metadata or {},
         )
 
@@ -67,7 +67,7 @@ class SessionService:
         if metadata is not None:
             session.metadata.update(metadata)
 
-        session.updated_at = datetime.utcnow()
+        session.updated_at = datetime.now(timezone.utc)
         await self.redis.save(session)
 
         return session
