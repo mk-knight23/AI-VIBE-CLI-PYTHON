@@ -79,7 +79,8 @@ This command invokes `code-reviewer` agent.
             call_args = mock_tool_registry.invoke.call_args
 
             assert call_args[0][0] == "subagent_code-reviewer"
-            assert call_args[0][1]["goal"] == "Use the code-reviewer agent to help with:\n\nauth.py"
+            # The prompt template is extracted from the command file content (Usage section)
+            assert call_args[0][1]["goal"] == "/review <file>\n\nauth.py"
             assert call_args[0][2] == Path(tmp)
             assert result == "Code review complete: No issues found"
 
