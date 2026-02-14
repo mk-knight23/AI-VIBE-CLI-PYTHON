@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +94,7 @@ class SmartCompactor:
         keep_system_messages: bool = True,
         min_messages: int = 5,
         max_messages: int = 50,
+        embedding_service: Optional[Any] = None,
     ):
         """Initialize smart compactor.
 
@@ -103,12 +104,14 @@ class SmartCompactor:
             keep_system_messages: Always keep system messages
             min_messages: Minimum messages to keep after compaction
             max_messages: Maximum messages to keep (soft limit)
+            embedding_service: EmbeddingService for semantic scoring (optional)
         """
         self.strategy = strategy
         self.keep_tool_calls = keep_tool_calls
         self.keep_system_messages = keep_system_messages
         self.min_messages = min_messages
         self.max_messages = max_messages
+        self.embedding_service = embedding_service
 
         logger.info(f"Smart compactor initialized with strategy: {strategy.value}")
 
@@ -164,8 +167,8 @@ class SmartCompactor:
                 CompactionStrategy.SEMANTIC,
                 CompactionStrategy.HYBRID,
             ]:
-                # Would require embedding model - placeholder for now
-                semantic = 0.5  # Default mid-range score
+                # Use embedding service for semantic similarity
+                semantic = self._calculate_semantic(msg, current_query)
 
             scored_messages.append(
                 MessageScore(msg, relevance, recency, importance, semantic)
@@ -245,6 +248,50 @@ class SmartCompactor:
 
         # User messages are baseline importance
         return 0.4
+
+    def _calculate_semantic(self, message: dict[str, Any], query: str) -> float:
+        """Calculate semantic similarity score for message.
+
+        Uses embedding service for real semantic similarity.
+        Falls back to 0.5 if embedding service unavailable.
+
+        Args:
+            message: Message to score
+            query: Current query for comparison
+
+        Returns:
+            Semantic similarity score (0-1)
+        """
+        # Fallback if no embedding service
+        if self.embedding_service is None:
+            return 0.5
+
+        # Fallback if no query
+        if not query:
+            return 0.5
+
+        try:
+            # Get message content
+            content = message.get("content", "")
+            if not content:
+                return 0.5
+
+            # Generate embeddings
+            query_embedding = self.embedding_service.embed(query)
+            content_embedding = self.embedding_service.embed(content)
+
+            # Calculate similarity
+            similarity = self.embedding_service.similarity(
+                query_embedding,
+                content_embedding
+            )
+
+            return similarity
+
+        except Exception as e:
+            logger.warning(f"Failed to calculate semantic similarity: {e}")
+            # Fallback to default score
+            return 0.5
 
     def compact(
         self,

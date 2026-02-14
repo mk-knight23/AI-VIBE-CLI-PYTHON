@@ -1,7 +1,7 @@
 """Context Compaction - Intelligent message pruning using multiple strategies."""
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from friday_ai.client.llm_client import LLMClient
 from friday_ai.client.response import StreamEventType, TokenUsage
@@ -36,6 +36,7 @@ class ChatCompactor:
         keep_system_messages: bool = True,
         min_messages: int = 5,
         max_messages: int = 50,
+        embedding_service: Optional[Any] = None,
     ):
         """Initialize chat compactor.
 
@@ -46,17 +47,34 @@ class ChatCompactor:
             keep_system_messages: Always keep system messages
             min_messages: Minimum messages before compaction
             max_messages: Maximum messages to keep after compaction
+            embedding_service: EmbeddingService for semantic scoring (optional)
         """
         self.client = client
         self.strategy = strategy
 
-        # Create smart compactor with strategy
+        # Initialize embedding service if needed for SEMANTIC or HYBRID strategies
+        if embedding_service is None and strategy in [
+            CompactionStrategy.SEMANTIC,
+            CompactionStrategy.HYBRID,
+        ]:
+            try:
+                from friday_ai.intelligence.embeddings import EmbeddingService
+
+                embedding_service = EmbeddingService()
+                logger.info("Initialized EmbeddingService for semantic compression")
+            except Exception as e:
+                logger.warning(f"Failed to initialize EmbeddingService: {e}")
+                logger.info("Semantic compression will use fallback scores")
+                embedding_service = None
+
+        # Create smart compactor with strategy and embedding service
         self.smart_compactor = SmartCompactor(
             strategy=strategy,
             keep_tool_calls=keep_tool_calls,
             keep_system_messages=keep_system_messages,
             min_messages=min_messages,
             max_messages=max_messages,
+            embedding_service=embedding_service,
         )
 
         logger.info(f"ChatCompactor initialized with strategy: {strategy.value}")

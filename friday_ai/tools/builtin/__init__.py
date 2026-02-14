@@ -8,6 +8,7 @@ from friday_ai.tools.builtin.http_client import HttpClient, get_http_client, shu
 from friday_ai.tools.builtin.http_request import HttpDownloadTool, HttpTool
 from friday_ai.tools.builtin.list_dir import ListDirTool
 from friday_ai.tools.builtin.memory import MemoryTool
+from friday_ai.tools.builtin.rag_index import RagIndexTool
 from friday_ai.tools.builtin.read_file import ReadFileTool
 from friday_ai.tools.builtin.shell import ShellTool
 from friday_ai.tools.builtin.security_audit import SecurityAuditLogTool
@@ -34,6 +35,7 @@ __all__ = [
     "DockerTool",
     "DatabaseTool",
     "SecurityAuditLogTool",
+    "RagIndexTool",
     "HttpClient",
     "get_http_client",
     "shutdown_http_client",
@@ -58,4 +60,5 @@ def get_all_builtin_tools() -> list[type]:
         HttpDownloadTool,
         DockerTool,
         DatabaseTool,
+        RagIndexTool,
     ]
