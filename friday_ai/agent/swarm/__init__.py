@@ -131,7 +131,7 @@ class SwarmCoordinator:
                 await asyncio.sleep(0.1)
 
     async def _execute_task(self, task: Task) -> Any:
-        """Execute a task.
+        """Execute a task using role-based agent delegation.
 
         Args:
             task: Task to execute.
@@ -139,8 +139,118 @@ class SwarmCoordinator:
         Returns:
             Task result.
         """
-        # In production, this would call actual agents
-        return {"status": "completed", "task": task.id, "output": f"Result for {task.description}"}
+        # Map task role to appropriate agent execution strategy
+        role_handlers = {
+            AgentRole.ARCHITECT: self._execute_architect_task,
+            AgentRole.CODER: self._execute_coder_task,
+            AgentRole.TESTER: self._execute_tester_task,
+            AgentRole.REVIEWER: self._execute_reviewer_task,
+            AgentRole.RESEARCHER: self._execute_researcher_task,
+            AgentRole.COORDINATOR: self._execute_coordinator_task,
+        }
+
+        handler = role_handlers.get(task.role)
+        if not handler:
+            logger.warning(f"No handler for role: {task.role}")
+            return {
+                "status": "failed",
+                "task": task.id,
+                "error": f"No handler for role: {task.role}"
+            }
+
+        try:
+            result = await handler(task)
+            return {
+                "status": "completed",
+                "task": task.id,
+                "role": task.role.value,
+                "output": result
+            }
+        except Exception as e:
+            logger.error(f"Task {task.id} execution failed: {e}")
+            return {
+                "status": "failed",
+                "task": task.id,
+                "error": str(e)
+            }
+
+    async def _execute_architect_task(self, task: Task) -> str:
+        """Execute architect-level task.
+
+        Args:
+            task: Task to execute.
+
+        Returns:
+            Task result string.
+        """
+        # In production, this would call architect agent
+        logger.info(f"Executing architect task: {task.description}")
+        return f"Architectural design for: {task.description}"
+
+    async def _execute_coder_task(self, task: Task) -> str:
+        """Execute coding task.
+
+        Args:
+            task: Task to execute.
+
+        Returns:
+            Task result string.
+        """
+        # In production, this would call coder agent
+        logger.info(f"Executing coding task: {task.description}")
+        return f"Code implementation for: {task.description}"
+
+    async def _execute_tester_task(self, task: Task) -> str:
+        """Execute testing task.
+
+        Args:
+            task: Task to execute.
+
+        Returns:
+            Task result string.
+        """
+        # In production, this would call tester agent
+        logger.info(f"Executing testing task: {task.description}")
+        return f"Tests for: {task.description}"
+
+    async def _execute_reviewer_task(self, task: Task) -> str:
+        """Execute review task.
+
+        Args:
+            task: Task to execute.
+
+        Returns:
+            Task result string.
+        """
+        # In production, this would call reviewer agent
+        logger.info(f"Executing review task: {task.description}")
+        return f"Review completed for: {task.description}"
+
+    async def _execute_researcher_task(self, task: Task) -> str:
+        """Execute research task.
+
+        Args:
+            task: Task to execute.
+
+        Returns:
+            Task result string.
+        """
+        # In production, this would call researcher agent
+        logger.info(f"Executing research task: {task.description}")
+        return f"Research results for: {task.description}"
+
+    async def _execute_coordinator_task(self, task: Task) -> str:
+        """Execute coordination task.
+
+        Args:
+            task: Task to execute.
+
+        Returns:
+            Task result string.
+        """
+        # In production, this would call coordinator agent
+        logger.info(f"Executing coordination task: {task.description}")
+        return f"Coordination completed for: {task.description}"
 
 
 class HierarchicalAgent:

@@ -53,6 +53,7 @@ class K8sClient:
         """
         self.config = config or K8sConfig()
         self._client = None
+        self._available = False
 
     async def initialize(self) -> bool:
         """Initialize the Kubernetes client.
@@ -74,14 +75,17 @@ class K8sClient:
             self._apps_v1 = client.AppsV1Api()
             self._networking_v1 = client.NetworkingV1Api()
 
+            self._available = True
             logger.info("Kubernetes client initialized")
             return True
 
         except ImportError:
             logger.warning("kubernetes Python client not installed. K8s operations unavailable.")
+            self._available = False
             return False
         except Exception as e:
             logger.error(f"Failed to initialize K8s client: {e}")
+            self._available = False
             return False
 
     async def get_pods(self, namespace: Optional[str] = None) -> list[PodInfo]:
@@ -93,7 +97,8 @@ class K8sClient:
         Returns:
             List of pod information.
         """
-        if not self._client:
+        if not self._available or not self._client:
+            logger.warning("Kubernetes client not available")
             return []
 
         try:
@@ -129,7 +134,8 @@ class K8sClient:
         Returns:
             List of service information.
         """
-        if not self._client:
+        if not self._available or not self._client:
+            logger.warning("Kubernetes client not available")
             return []
 
         try:
@@ -168,7 +174,8 @@ class K8sClient:
         Returns:
             True if successful.
         """
-        if not self._client:
+        if not self._available or not self._client:
+            logger.warning("Kubernetes client not available")
             return False
 
         try:
@@ -204,7 +211,8 @@ class K8sClient:
         Returns:
             True if successful.
         """
-        if not self._client:
+        if not self._available or not self._client:
+            logger.warning("Kubernetes client not available")
             return False
 
         try:
@@ -230,7 +238,8 @@ class K8sClient:
         Returns:
             List of deployment information.
         """
-        if not self._client:
+        if not self._available or not self._client:
+            logger.warning("Kubernetes client not available")
             return []
 
         try:
@@ -260,7 +269,8 @@ class K8sClient:
         Returns:
             True if successful.
         """
-        if not self._client:
+        if not self._available or not self._client:
+            logger.warning("Kubernetes client not available")
             return False
 
         try:
@@ -372,8 +382,8 @@ class K8sClient:
         Returns:
             Cluster info dictionary.
         """
-        if not self._client:
-            return {"error": "Client not initialized"}
+        if not self._available or not self._client:
+            return {"error": "Client not initialized", "available": False}
 
         try:
             info = self._client.ApiClient().call_api(

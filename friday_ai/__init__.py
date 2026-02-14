@@ -1,6 +1,6 @@
 """Friday AI Teammate - Your AI coding assistant in the terminal."""
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 __author__ = "mk-knight23"
 
 # Core exports

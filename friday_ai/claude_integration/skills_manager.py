@@ -2,6 +2,7 @@
 
 Loads and manages skill definitions from skill directories,
 supporting contextual activation based on file types and user intent.
+Also integrates with remote skill registry for community skills.
 """
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from friday_ai.claude_integration.utils import load_markdown_file
 
@@ -87,17 +88,32 @@ class SkillDefinition:
 
 
 class SkillsManager:
-    """Manager for loading and activating skills from .claude/skills/."""
+    """Manager for loading and activating skills from .claude/skills/.
 
-    def __init__(self, claude_dir: Path | None):
+    Also supports remote skill discovery and installation from community registry.
+    """
+
+    def __init__(self, claude_dir: Path | None, remote_config: dict[str, Any] | None = None):
         """Initialize the skills manager.
 
         Args:
             claude_dir: Path to the .claude directory. If None, no skills will be loaded.
+            remote_config: Optional configuration for remote skill registry.
         """
         self.claude_dir = claude_dir
         self.skills_dir = claude_dir / "skills" if claude_dir else None
         self._skills: dict[str, SkillDefinition] = {}
+        self._remote_client: Optional[Any] = None
+
+        # Initialize remote client if config provided
+        if remote_config and remote_config.get("enabled", False):
+            try:
+                from friday_ai.claude_integration.skills import RemoteSkillClient
+
+                self._remote_client = RemoteSkillClient(remote_config)
+                logger.info("Remote skill client initialized")
+            except ImportError as e:
+                logger.warning(f"Remote skill client not available: {e}")
 
     def load_all_skills(self) -> list[SkillDefinition]:
         """Load all skill definitions from the skills directory.
@@ -302,3 +318,136 @@ class SkillsManager:
             lines.append("\n---\n")
 
         return "\n".join(lines)
+
+    async def search_remote_skills(
+        self,
+        query: str,
+        tags: Optional[list[str]] = None,
+        limit: int = 20,
+    ) -> list[Any]:
+        """Search for skills in the remote registry.
+
+        Args:
+            query: Search query string.
+            tags: Optional tag filters.
+            limit: Maximum results to return.
+
+        Returns:
+            List of RemoteSkillInfo objects.
+        """
+        if not self._remote_client:
+            logger.warning("Remote skill client not configured")
+            return []
+
+        try:
+            results = await self._remote_client.search_skills(query, tags, limit)
+            logger.info(f"Found {len(results)} remote skills for query: {query}")
+            return results
+        except Exception as e:
+            logger.error(f"Remote skill search failed: {e}")
+            return []
+
+    async def install_remote_skill(
+        self,
+        skill_name: str,
+        url: str,
+        install_deps: bool = True,
+    ) -> bool:
+        """Install a skill from the remote registry.
+
+        Args:
+            skill_name: Name of the skill to install.
+            url: Download URL for the skill.
+            install_deps: Whether to install dependencies.
+
+        Returns:
+            True if installation succeeded.
+        """
+        if not self._remote_client:
+            logger.warning("Remote skill client not configured")
+            return False
+
+        if not self.skills_dir:
+            logger.warning("Skills directory not configured")
+            return False
+
+        try:
+            success = await self._remote_client.install_skill(
+                skill_name,
+                url,
+                self.skills_dir,
+                install_deps,
+            )
+
+            if success:
+                # Reload skills to include the newly installed one
+                self.load_all_skills()
+                logger.info(f"Successfully installed remote skill: {skill_name}")
+
+            return success
+        except Exception as e:
+            logger.error(f"Failed to install remote skill: {e}")
+            return False
+
+    async def update_remote_skill(
+        self,
+        skill_name: str,
+        url: str,
+    ) -> bool:
+        """Update an installed remote skill.
+
+        Args:
+            skill_name: Name of the skill to update.
+            url: Download URL for the skill.
+
+        Returns:
+            True if update succeeded.
+        """
+        if not self._remote_client:
+            logger.warning("Remote skill client not configured")
+            return False
+
+        if not self.skills_dir:
+            logger.warning("Skills directory not configured")
+            return False
+
+        try:
+            success = await self._remote_client.update_skill(
+                skill_name,
+                url,
+                self.skills_dir,
+            )
+
+            if success:
+                # Reload skills to include the updated version
+                self.load_all_skills()
+                logger.info(f"Successfully updated remote skill: {skill_name}")
+
+            return success
+        except Exception as e:
+            logger.error(f"Failed to update remote skill: {e}")
+            return False
+
+    async def list_installed_skills(self) -> list[str]:
+        """List all installed skill names.
+
+        Returns:
+            List of skill names.
+        """
+        if not self._remote_client or not self.skills_dir:
+            return list(self._skills.keys())
+
+        try:
+            return await self._remote_client.list_installed_skills(self.skills_dir)
+        except Exception as e:
+            logger.error(f"Failed to list installed skills: {e}")
+            return list(self._skills.keys())
+
+    async def close_remote_client(self) -> None:
+        """Close the remote skill client if initialized."""
+        if self._remote_client:
+            try:
+                await self._remote_client.close()
+                logger.debug("Remote skill client closed")
+            except Exception as e:
+                logger.error(f"Error closing remote client: {e}")
