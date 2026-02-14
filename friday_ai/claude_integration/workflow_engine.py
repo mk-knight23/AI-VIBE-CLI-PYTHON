@@ -14,6 +14,8 @@ from typing import Any, AsyncGenerator
 
 from friday_ai.agent.events import AgentEvent, AgentEventType
 from friday_ai.claude_integration.utils import load_markdown_file
+from friday_ai.tools.base import Tool
+from friday_ai.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -313,12 +315,14 @@ class WorkflowEngine:
     async def execute_workflow(
         self,
         workflow_name: str,
+        tool_registry: ToolRegistry | None = None,
         initial_context: dict[str, Any] | None = None,
     ) -> AsyncGenerator[AgentEvent, None]:
         """Execute a workflow step by step.
 
         Args:
             workflow_name: Name of the workflow to execute.
+            tool_registry: Tool registry for executing tools in steps.
             initial_context: Optional initial context variables.
 
         Yields:
@@ -363,7 +367,7 @@ class WorkflowEngine:
 
             # Execute the step
             try:
-                result = await self._execute_step(step, state)
+                result = await self._execute_step(step, state, tool_registry)
 
                 state.completed_steps.append(state.current_step_index)
                 state.context[f"step_{step_num}_result"] = result
@@ -411,25 +415,40 @@ class WorkflowEngine:
         self,
         step: WorkflowStep,
         state: WorkflowState,
+        tool_registry: ToolRegistry | None = None,
     ) -> str:
         """Execute a single workflow step.
 
-        This is a placeholder that returns the step prompt.
-        In a full implementation, this would invoke an agent or tool.
+        Executes agents and tools as specified in the step definition.
 
         Args:
             step: The step to execute.
             state: Current workflow state.
+            tool_registry: Tool registry for tool execution.
 
         Returns:
             Step execution result.
         """
-        # For now, just return the prompt/instruction
-        # In the full implementation, this would:
-        # - Invoke the specified agent if any
-        # - Execute tools if specified
-        # - Handle verification
+        # If step has an agent, invoke it
+        if step.agent:
+            agent_result = await self._invoke_agent(
+                step.agent, step.prompt, state, tool_registry
+            )
+            return agent_result
 
+        # If step has tools, execute them
+        if step.tools and tool_registry:
+            tool_results = []
+
+            for tool_name in step.tools:
+                tool_result = await self._invoke_tool(
+                    tool_name, step.prompt, state, tool_registry
+                )
+                tool_results.append(tool_result)
+
+            return "\n\n".join(tool_results)
+
+        # If no agent or tools, return the prompt/description
         result_parts = [f"Step: {step.name}"]
 
         if step.description:
@@ -438,10 +457,167 @@ class WorkflowEngine:
         if step.prompt:
             result_parts.append(f"Instruction: {step.prompt}")
 
-        if step.agent:
-            result_parts.append(f"Agent: {step.agent}")
-
-        if step.tools:
-            result_parts.append(f"Tools: {', '.join(step.tools)}")
-
         return "\n".join(result_parts)
+
+    async def _invoke_agent(
+        self,
+        agent_name: str,
+        prompt: str,
+        state: WorkflowState,
+        tool_registry: ToolRegistry | None = None,
+    ) -> str:
+        """Invoke an agent for workflow step execution.
+
+        Args:
+            agent_name: Name of the agent to invoke.
+            prompt: Prompt/instruction for the agent.
+            state: Current workflow state.
+            tool_registry: Tool registry for agent execution.
+
+        Returns:
+            Agent execution result.
+        """
+        # Try to get subagent tool from registry
+        if not tool_registry:
+            return f"Error: No tool registry available to invoke agent '{agent_name}'"
+
+        subagent_tool = self._get_subagent_tool(agent_name, tool_registry)
+        if not subagent_tool:
+            return f"Error: Agent '{agent_name}' not found in tool registry"
+
+        try:
+            # Execute the subagent with the prompt
+            from pathlib import Path
+            from friday_ai.tools.base import ToolInvocation
+
+            # Add workflow context to prompt
+            context_info = self._format_context(state)
+            full_prompt = f"{prompt}\n\nWorkflow Context:\n{context_info}"
+
+            invocation = ToolInvocation(
+                params={"goal": full_prompt},
+                cwd=Path.cwd(),
+            )
+
+            result = await subagent_tool.execute(invocation)
+
+            if result.success:
+                return result.output or "Agent completed successfully"
+            else:
+                return f"Agent execution failed: {result.error}"
+
+        except Exception as e:
+            logger.exception(f"Error invoking agent '{agent_name}'")
+            return f"Error invoking agent '{agent_name}': {str(e)}"
+
+    async def _invoke_tool(
+        self,
+        tool_name: str,
+        prompt: str,
+        state: WorkflowState,
+        tool_registry: ToolRegistry,
+    ) -> str:
+        """Invoke a tool for workflow step execution.
+
+        Args:
+            tool_name: Name of the tool to invoke.
+            prompt: Prompt/instruction for the tool.
+            state: Current workflow state.
+            tool_registry: Tool registry for tool execution.
+
+        Returns:
+            Tool execution result.
+        """
+        # Get tool from registry
+        tool = tool_registry.get(tool_name)
+        if not tool:
+            return f"Error: Tool '{tool_name}' not found in registry"
+
+        try:
+            from pathlib import Path
+            from friday_ai.tools.base import ToolInvocation
+
+            # Parse tool parameters from prompt if it's a shell tool
+            if tool_name == "shell" and "Execute:" in prompt:
+                # Extract command from prompt
+                command_match = re.search(r'Execute:\s*(.+?)(?:\n|$)', prompt, re.DOTALL)
+                if command_match:
+                    command = command_match.group(1).strip()
+                    params = {"command": command}
+                else:
+                    params = {"command": prompt}
+            else:
+                # For other tools, pass prompt as parameter
+                params = {"prompt": prompt}
+
+            invocation = ToolInvocation(
+                params=params,
+                cwd=Path.cwd(),
+            )
+
+            result = await tool.execute(invocation)
+
+            if result.success:
+                return result.output or f"Tool '{tool_name}' executed successfully"
+            else:
+                return f"Tool '{tool_name}' execution failed: {result.error}"
+
+        except Exception as e:
+            logger.exception(f"Error invoking tool '{tool_name}'")
+            return f"Error invoking tool '{tool_name}': {str(e)}"
+
+    def _get_subagent_tool(
+        self,
+        agent_name: str,
+        tool_registry: ToolRegistry,
+    ) -> Tool | None:
+        """Get a subagent tool by name from the registry.
+
+        Args:
+            agent_name: Name of the agent/subagent.
+            tool_registry: Tool registry to search.
+
+        Returns:
+            Tool object if found, None otherwise.
+        """
+        # Subagent tools are typically named like 'subagent:agent_name'
+        # Try different naming patterns
+        possible_names = [
+            f"subagent:{agent_name}",
+            agent_name,
+            f"agent_{agent_name}",
+        ]
+
+        for name in possible_names:
+            tool = tool_registry.get(name)
+            if tool:
+                return tool
+
+        return None
+
+    def _format_context(self, state: WorkflowState) -> str:
+        """Format workflow state context for display.
+
+        Args:
+            state: Current workflow state.
+
+        Returns:
+            Formatted context string.
+        """
+        context_lines = []
+
+        for key, value in state.context.items():
+            # Skip internal keys
+            if key.startswith("_"):
+                continue
+
+            # Format value
+            if isinstance(value, str):
+                context_lines.append(f"  {key}: {value}")
+            elif isinstance(value, (list, dict)):
+                import json
+                context_lines.append(f"  {key}: {json.dumps(value, indent=2)}")
+            else:
+                context_lines.append(f"  {key}: {str(value)}")
+
+        return "\n".join(context_lines) if context_lines else "No context available"

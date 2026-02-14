@@ -567,24 +567,39 @@ class CLI:
             return
 
         try:
-            # Build the prompt
-            prompt = command.build_prompt(args)
-
             if command.workflow:
                 # Execute workflow
                 console.print(f"\n[bold]Running workflow: {command.workflow}[/bold]")
                 await self._run_workflow(command.workflow)
             elif command.agent:
-                # Invoke agent
+                # Invoke agent via command mapper
                 console.print(f"\n[bold]Invoking agent: {command.agent}[/bold]")
-                await self._process_message(prompt)
+
+                if not self.agent or not self.agent.session:
+                    console.print("[error]No active session. Cannot invoke agent.[/error]")
+                    return
+
+                # Use command mapper to execute (invokes subagent tool)
+                result = await self._command_mapper.execute_command(
+                    command.name,
+                    args,
+                    self.agent
+                )
+
+                # Display the result
+                if result:
+                    console.print(f"\n{result}")
             elif command.skill:
                 # Activate skill and process
                 if self._claude_context and self._claude_context.activate_skill(command.skill):
                     console.print(f"[success]Activated skill: {command.skill}[/success]")
+
+                # Build prompt and process as message
+                prompt = command.build_prompt(args)
                 await self._process_message(prompt)
             else:
                 # Just process the prompt
+                prompt = command.build_prompt(args)
                 await self._process_message(prompt)
         except Exception as e:
             console.print(f"[error]Error executing command: {e}[/error]")

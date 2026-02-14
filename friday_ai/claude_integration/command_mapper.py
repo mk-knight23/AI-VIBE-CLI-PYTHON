@@ -341,7 +341,8 @@ class CommandMapper:
                     agent.session.hook_system,
                     agent.session.approval_manager,
                 )
-                return result.output if result.success else result.error
+                # Use to_model_output() to get properly formatted result
+                return result.to_model_output()
             except Exception as e:
                 logger.error(f"Failed to execute agent command: {e}")
                 return f"Error executing /{command.name}: {e}"
