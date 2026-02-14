@@ -69,6 +69,9 @@ class Session:
         # Context manager (initialized separately)
         self.context_manager: ContextManager | None = None
 
+        # Multi-provider router (optional, initialized separately if available)
+        self.llm_router = None
+
         # Timestamps
         self.created_at = datetime.now(UTC)
         self.updated_at = datetime.now(UTC)

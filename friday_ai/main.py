@@ -248,6 +248,70 @@ class CLI:
             details = self.voice_manager.get_status()
             console.print(f"Details: {details}")
 
+    def _handle_provider_list(self) -> None:
+        """Handle /provider list command."""
+        console.print("\n[bold]Available LLM Providers[/bold]")
+        console.print("\nNote: Multi-provider routing is an optional feature.")
+        console.print("To enable, configure providers in config.toml")
+        console.print("\nSupported providers:")
+        providers = [
+            ("openai", "OpenAI (GPT-4, GPT-3.5)", "High quality, higher cost"),
+            ("anthropic", "Anthropic (Claude)", "High quality, fast"),
+            ("google", "Google (Gemini)", "Good quality, lower cost"),
+            ("groq", "Groq (Llama)", "Fast, very low cost"),
+            ("ollama", "Ollama (Local)", "Free, local models"),
+        ]
+        for name, desc, detail in providers:
+            console.print(f"  • [bold]{name}[/bold]: {desc}")
+            console.print(f"    {detail}")
+
+    def _handle_provider_switch(self, provider_name: str) -> None:
+        """Handle /provider <name> command.
+
+        Args:
+            provider_name: Name of provider to switch to.
+        """
+        from friday_ai.client.providers.base import ProviderType
+
+        # Validate provider name
+        try:
+            provider_type = ProviderType(provider_name.lower())
+        except ValueError:
+            console.print(f"[error]Unknown provider: {provider_name}[/error]")
+            console.print("Use /provider list to see available providers")
+            return
+
+        # Update config
+        self.config.model_name = provider_type.value
+        console.print(f"[success]Switched to provider: {provider_type.value}[/success]")
+        console.print("[dim]Note: This changes the model config only.[/dim]")
+        console.print("[dim]For multi-provider routing, configure in config.toml[/dim]")
+
+    def _handle_cost_command(self) -> None:
+        """Handle /cost command to show usage and costs."""
+        if not self.agent or not self.agent.session:
+            console.print("[error]No active session[/error]")
+            return
+
+        if not self.agent.session.llm_router:
+            console.print("[dim]Multi-provider routing not enabled[/dim]")
+            console.print("To enable, configure providers in config.toml")
+            return
+
+        # Get cost summary
+        summary = self.agent.session.llm_router.get_cost_summary()
+
+        console.print("\n[bold]Provider Usage and Costs[/bold]\n")
+        console.print(f"Total Requests: {summary['total_requests']}")
+        console.print(f"Total Cost: ${summary['total_cost']:.4f}\n")
+
+        if summary['by_provider']:
+            console.print("[bold]By Provider:[/bold]")
+            for provider, stats in summary['by_provider'].items():
+                console.print(f"  {provider}:")
+                console.print(f"    Requests: {stats['requests']}")
+                console.print(f"    Cost: ${stats['cost']:.4f}")
+
     async def _handle_command(self, command: str) -> bool:
         cmd = command.lower().strip()
         parts = cmd.split(maxsplit=1)
@@ -326,6 +390,21 @@ class CLI:
                     console.print(
                         f"  • {server['name']}: [{status_color}]{status}[/{status_color}] ({server['tools']} tools)"
                     )
+        elif cmd_name == "/provider":
+            # Provider management commands
+            if not cmd_args:
+                console.print("[error]Usage: /provider [list|<name>] [/error]")
+                console.print("Examples:")
+                console.print("  /provider list      - List all providers")
+                console.print("  /provider openai    - Switch to OpenAI")
+                console.print("  /provider anthropic  - Switch to Anthropic")
+            elif cmd_args == "list":
+                self._handle_provider_list()
+            else:
+                self._handle_provider_switch(cmd_args)
+        elif cmd_name == "/cost":
+            # Show cost tracking
+            self._handle_cost_command()
         elif cmd_name == "/save":
             if self.agent and self.agent.session:
                 from friday_ai.agent.persistence import PersistenceManager, SessionSnapshot
