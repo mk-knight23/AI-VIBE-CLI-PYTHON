@@ -1,16 +1,48 @@
-# Friday AI Teammate
+# 🤖 Friday AI Teammate
 
-[![PyPI version](https://badge.fury.io/py/friday-ai-teammate.svg)](https://pypi.org/project/friday-ai-teammate/)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<p align="center">
+  <img src="https://img.shields.io/badge/AI--VIBE-CLI--PYTHON-blue?style=for-the-badge&logo=python&logoColor=white" alt="AI Vibe Project">
+  <br>
+  <b>Empowering developers with enterprise-grade autonomous AI coding assistance directly in the terminal.</b>
+</p>
 
-**Friday** is a powerful AI assistant designed to help you with coding tasks, file management, database operations, container management, and information retrieval directly from your terminal.
+<p align="center">
+  <a href="https://pypi.org/project/friday-ai-teammate/"><img src="https://badge.fury.io/py/friday-ai-teammate.svg" alt="PyPI version"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
 
-[**Version:** 1.0.0](docs/CHANGELOG.md) | **Status:** Production/Stable | **License:** MIT
+---
+
+## 🗺️ Quick Navigation
+
+- [✨ Features](#-features)
+- [🚀 Quick Start](#-quick-start)
+- [📚 Built-in Tools](#-built-in-tools)
+- [🧠 Claude Integration](#-claude-integration)
+- [🔒 Security Features](#-security-features)
+- [🚀 Autonomous Mode](#-autonomous-mode)
+- [📖 Documentation](#-documentation)
+- [🛠️ Development](#%EF%B8%8F-development)
+- [📊 Version History](#-version-history)
+
+---
+
+## 🛠️ Engineered With
+
+<p align="left">
+  <a href="https://python.org"><img src="https://skillicons.dev/icons?i=python" alt="Python"></a>
+  <a href="https://openai.com"><img src="https://skillicons.dev/icons?i=openai" alt="OpenAI"></a>
+  <a href="https://docker.com"><img src="https://skillicons.dev/icons?i=docker" alt="Docker"></a>
+  <a href="https://postgres.org"><img src="https://skillicons.dev/icons?i=postgres" alt="PostgreSQL"></a>
+  <a href="https://git-scm.com"><img src="https://skillicons.dev/icons?i=git" alt="Git"></a>
+</p>
 
 ---
 
 ## ✨ Features
+
+**Friday** is a powerful AI assistant designed to help you with coding tasks, file management, database operations, container management, and information retrieval directly from your terminal.
 
 - 🛠️ **16+ Built-in Tools** - File operations, shell, git, docker, database, HTTP requests, web search
 - 🧠 **Claude Integration** - Load agents, skills, rules, workflows, and commands from `.claude/` folders
@@ -200,4 +232,6 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-*Friday AI Teammate v1.0.0 - Enterprise Grade AI Coding Assistant*
+<p align="center">
+  <i>Friday AI Teammate v1.0.0 - Enterprise Grade AI Coding Assistant</i>
+</p>

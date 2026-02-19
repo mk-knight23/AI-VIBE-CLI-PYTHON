@@ -6,7 +6,6 @@ Provides in-memory and persistent caching with TTL support.
 import hashlib
 import json
 import logging
-import pickle
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar, Dict
 from collections import OrderedDict
