@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "friday-ai-teammate"
 version = "2.1.0"
-description = "Friday AI Teammate - A powerful AI coding assistant for your terminal"
+description = "Enterprise-grade autonomous AI coding assistant CLI with 16+ tools, agent swarms, and MCP integration."
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
