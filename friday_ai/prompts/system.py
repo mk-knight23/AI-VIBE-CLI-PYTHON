@@ -10,6 +10,7 @@ def get_system_prompt(
     user_memory: str | None = None,
     tools: list[Tool] | None = None,
     claude_context: Any | None = None,
+    repo_map: str | None = None,
 ) -> str:
     parts = []
 
@@ -47,6 +48,10 @@ def get_system_prompt(
 
     if user_memory:
         parts.append(_get_memory_section(user_memory))
+
+    if repo_map:
+        parts.append(_get_repo_map_section(repo_map))
+
     # Operational guidelines
     parts.append(_get_operational_section())
 
@@ -299,6 +304,17 @@ You have access to the following tools to accomplish your tasks:
    - Use sub-agents when the task involves complex refactoring, codebase exploration, or system-wide analysis"""
 
     return guidelines
+
+
+def _get_repo_map_section(repo_map: str) -> str:
+    """Generate repository map section."""
+    return f"""# Repository Map (Aider-style)
+
+This is a structural overview of the current repository. Use it to understand where files are located and what they contain (classes/functions).
+
+```
+{repo_map}
+```"""
 
 
 def get_compression_prompt() -> str:

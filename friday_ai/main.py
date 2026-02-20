@@ -598,6 +598,11 @@ class CLI:
                 console.print("[dim]No .claude agents found[/dim]")
         elif cmd_name == "/skills":
             # List and activate skills
+            await self._handle_skills_command(cmd_args)
+        elif cmd_name == "/scan":
+            from friday_ai.agent.repo_map import get_repo_map
+            repo_map = get_repo_map(self.config.cwd)
+            self.tui.render_repo_map(repo_map)
             if not cmd_args:
                 if not self._claude_context:
                     self._init_claude_integration()
@@ -1047,7 +1052,6 @@ pytest tests/ -v
 
 # CLI Group for subcommands
 @click.group(invoke_without_command=True)
-@click.argument("prompt", required=False)
 @click.option(
     "--cwd",
     "-c",
@@ -1085,7 +1089,6 @@ pytest tests/ -v
 @click.pass_context
 def cli(
     ctx,
-    prompt: str | None,
     cwd: Path | None,
     version: bool,
     show_config: bool,
@@ -1101,6 +1104,8 @@ def cli(
         friday -c /path/to/code  # Set working directory
         friday --version         # Show version
     """
+    print(f"DEBUG: sys.argv: {sys.argv}")
+    print(f"DEBUG: ctx.invoked_subcommand: {ctx.invoked_subcommand}")
     if version:
         console.print(f"Friday AI Teammate v{__version__}")
         ctx.exit()
@@ -1126,33 +1131,51 @@ def cli(
             console.print(f"[error]Error loading config: {e}[/error]")
         ctx.exit()
 
-    # Handle subcommands
-    if ctx.invoked_subcommand is None:
-        # No subcommand, run main logic
-        config = None
-        try:
-            config = load_config(cwd=cwd)
-        except Exception as e:
-            console.print(f"[error]Configuration Error: {e}[/error]")
-            ctx.exit(1)
+    try:
+        config = load_config(cwd=cwd)
+    except Exception as e:
+        console.print(f"[error]Configuration Error: {e}[/error]")
+        ctx.exit(1)
 
-        assert config is not None
+    assert config is not None
 
-        # Override config with CLI options
-        if approval:
-            config.approval = ApprovalPolicy(approval)
-        if model:
-            config.model_name = model
-        if accessible:
-            config.accessible = True
+    # Override config with CLI options
+    if approval:
+        config.approval = ApprovalPolicy(approval)
+    if model:
+        config.model_name = model
+    if accessible:
+        config.accessible = True
 
-        errors = config.validate()
-        if errors:
-            for error in errors:
-                console.print(f"[error]{error}[/error]")
-            ctx.exit(1)
+    errors = config.validate()
+    if errors:
+        is_scan = "scan" in sys.argv
+        for error in errors:
+            # Skip API key error for scan command
+            if "API key" in error and is_scan:
+                continue
+            console.print(f"[error]{error}[/error]")
+        
+        # Only exit if not scan command or if there are other errors
+        non_api_errors = [e for e in errors if "API key" not in e]
+        if non_api_errors or (not is_scan and errors):
+             ctx.exit(1)
 
-        friday_cli = CLI(config)
+    friday_cli = CLI(config)
+
+    # If a subcommand is being invoked, Click will handle it after this function returns.
+    # We only run the interactive/single prompt logic if no subcommand is present.
+    is_subcommand = any(arg in ["scan", "init", "mcp-server", "resume", "config", "workflow"] for arg in sys.argv)
+    
+    # If a subcommand is being invoked, Click will handle it after this function returns.
+    # We only run the interactive/single prompt logic if no subcommand is present.
+    is_subcommand = any(arg in ["scan", "init", "mcp-server", "resume", "config", "workflow"] for arg in sys.argv)
+    
+    if ctx.invoked_subcommand is None and not is_subcommand:
+        # Check for prompt in arguments that Click didn't catch because it's not and argument anymore
+        prompt = None
+        if len(sys.argv) > 1 and not sys.argv[-1].startswith("-") and sys.argv[-1] not in ["scan", "init", "mcp-server", "resume", "config", "workflow"]:
+            prompt = sys.argv[-1]
 
         if prompt:
             result = asyncio.run(friday_cli.run_single(prompt))
@@ -1387,125 +1410,45 @@ def resume(session_id: str | None):
         console.print(f"[error]Error resuming session: {e}[/error]")
 
 
-# Entry point
-@click.command()
-@click.argument("prompt", required=False)
+@cli.command()
+@click.option(
+    "--transport",
+    type=click.Choice(["stdio", "sse"]),
+    default="stdio",
+    help="Transport type (stdio or sse)",
+)
+@click.option("--port", type=int, default=8000, help="Port for SSE transport")
+def mcp_server(transport: str, port: int):
+    """Start Friday as an MCP server."""
+    from friday_ai.mcp.server import start_mcp_server, TransportType
+
+    config = load_config(cwd=None)
+    t = TransportType.STDIO if transport == "stdio" else TransportType.SSE
+
+    console.print(f"[success]Starting Friday MCP server ({transport})...[/success]")
+    asyncio.run(start_mcp_server(config, transport=t, port=port))
+
+
+@cli.command()
 @click.option(
     "--cwd",
     "-c",
     type=click.Path(exists=True, file_okay=False, path_type=Path),
-    default=None,
-    help="Current working directory",
+    help="Directory to scan",
 )
-@click.option(
-    "--version",
-    "-v",
-    is_flag=True,
-    help="Show version information",
-)
-@click.option(
-    "--resume",
-    "-r",
-    type=str,
-    default=None,
-    help="Resume a previous session",
-)
-@click.option(
-    "--accessible",
-    is_flag=True,
-    help="Enable accessible UI mode (high contrast)",
-)
-def main(
-    prompt: str | None,
-    cwd: Path | None,
-    version: bool,
-    resume: str | None,
-    accessible: bool = False,
-):
-    """Friday AI - Your intelligent coding assistant."""
-    if version:
-        console.print(f"Friday AI Teammate v{__version__}")
-        return
-
-    # Handle resume option
-    if resume:
-        from friday_ai.agent.persistence import PersistenceManager
-        from friday_ai.agent.session import Session
-
-        async def do_load_snapshot():
-            persistence_manager = PersistenceManager()
-            return await persistence_manager.load_session(resume)
-
-        snapshot = asyncio.run(do_load_snapshot())
-
-        if not snapshot:
-            console.print(f"[error]Session not found: {resume}[/error]")
-            sys.exit(1)
-
-        try:
-            config = load_config(cwd=cwd)
-        except Exception as e:
-            console.print(f"[error]Configuration Error: {e}[/error]")
-            sys.exit(1)
-
-        cli_instance = CLI(config)
-
-        async def do_resume():
-            from friday_ai.agent.agent import Agent
-
-            async with Agent(config) as agent:
-                cli_instance.agent = agent
-                session = Session(config=config)
-                await session.initialize()
-                session.metrics.session_id = snapshot.session_id
-                session.created_at = snapshot.created_at
-                session.updated_at = snapshot.updated_at
-                session.metrics.turn_count = snapshot.turn_count
-                if session.context_manager:
-                    session.context_manager.total_usage = snapshot.total_usage
-
-                    for msg in snapshot.messages:
-                        if msg.get("role") == "system":
-                            continue
-                        elif msg["role"] == "user":
-                            session.context_manager.add_user_message(msg.get("content", ""))
-                        elif msg["role"] == "assistant":
-                            session.context_manager.add_assistant_message(
-                                msg.get("content", ""), msg.get("tool_calls")
-                            )
-                        elif msg["role"] == "tool":
-                            session.context_manager.add_tool_result(
-                                msg.get("tool_call_id", ""), msg.get("content", "")
-                            )
-
-                agent.session = session
-                console.print(f"[success]Resumed session: {resume}[/success]")
-                await cli_instance.run_interactive()
-
-        asyncio.run(do_resume())
-        return
-
-    try:
-        config = load_config(cwd=cwd)
-    except Exception as e:
-        console.print(f"[error]Configuration Error: {e}[/error]")
-        sys.exit(1)
-
-    errors = config.validate()
-    if errors:
-        for error in errors:
-            console.print(f"[error]{error}[/error]")
-        sys.exit(1)
-
-    cli_instance = CLI(config)
-
-    if prompt:
-        result = asyncio.run(cli_instance.run_single(prompt))
-        if result is None:
-            sys.exit(1)
-    else:
-        asyncio.run(cli_instance.run_interactive())
+def scan(cwd: Path | None):
+    """Generate and display a repository map."""
+    from friday_ai.agent.repo_map import get_repo_map
+    
+    print(f"DEBUG: Scan started for {cwd or Path.cwd()}")
+    config = load_config(cwd=cwd)
+    print(f"DEBUG: Config loaded, cwd: {config.cwd}")
+    repo_map = get_repo_map(config.cwd)
+    print(f"DEBUG: Repo map generated, length: {len(repo_map)}")
+    
+    tui = TUI(config)
+    tui.render_repo_map(repo_map)
 
 
 if __name__ == "__main__":
-    main()
+    cli()

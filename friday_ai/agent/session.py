@@ -19,6 +19,7 @@ from friday_ai.context.loop_detector import LoopDetector
 from friday_ai.context.manager import ContextManager
 from friday_ai.hooks.hook_system import HookSystem
 from friday_ai.tools.registry import create_default_registry
+from friday_ai.agent.repo_map import get_repo_map
 
 logger = logging.getLogger(__name__)
 
@@ -88,11 +89,15 @@ class Session:
         # Initialize tool orchestrator (MCP, discovery)
         mcp_tools = await self.tool_orchestrator.initialize()
 
+        # Generate repo map for context
+        repo_map = get_repo_map(self.config.cwd)
+
         # Initialize context manager
         self.context_manager = ContextManager(
             config=self.config,
             user_memory=self._load_memory(),
             tools=self.tool_orchestrator.tool_registry.get_tools(),
+            repo_map=repo_map,
         )
 
         logger.info(f"Session initialized with {mcp_tools} MCP tools")

@@ -16,7 +16,10 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, List
+
+from friday_ai.agent.autonomous.git_manager import GitManager
+from friday_ai.agent.autonomous.quality_manager import QualityManager
 
 if TYPE_CHECKING:
     from friday_ai.agent.agent import Agent
@@ -620,6 +623,10 @@ class AutonomousLoop:
         self.exit_reason = ""
         self.session_id: str | None = None
         self._iteration_logs: list[Path] = []
+        
+        # Advanced Managers
+        self.git_manager = GitManager(Path(self.agent.config.cwd))
+        self.quality_manager = QualityManager(Path(self.agent.config.cwd))
 
         # Ensure directories exist
         Path(self.config.log_dir).mkdir(parents=True, exist_ok=True)
@@ -786,7 +793,17 @@ class AutonomousLoop:
                     "files_modified_count": len(result.get("files_modified", [])),
                 })
 
-                # Check for exit conditions
+                # Step: Autonomous Quality Check (Self-Healing)
+                if not result.get("error"):
+                    test_results = self.quality_manager.run_tests()
+                    if not test_results.get("success"):
+                        # Injected self-healing prompt for next iteration
+                        self.exit_reason = "self_healing_required"
+                        logger.info("Self-healing triggered due to test failure")
+                    elif len(result.get("files_modified", [])) > 0:
+                        # Step: Autonomous Git (Auto-Commit)
+                        self.git_manager.auto_commit_iteration(self.loop_number, analysis.status)
+
                 if self._should_exit(analysis):
                     results["exit_reason"] = self.exit_reason
                     self._update_status_file("complete", {"exit_reason": self.exit_reason})

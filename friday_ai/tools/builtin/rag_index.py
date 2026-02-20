@@ -26,6 +26,12 @@ class RagIndexTool(Tool):
         "Creates embeddings for all files and saves to .friday_rag_index.json"
     )
     kind = ToolKind.READ
+    schema = {
+        "type": "object",
+        "properties": {
+            "path": {"type": "string", "description": "Directory to index"}
+        }
+    }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

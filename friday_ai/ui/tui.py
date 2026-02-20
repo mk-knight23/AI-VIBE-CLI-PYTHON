@@ -107,6 +107,30 @@ class TUI:
             self.console.print()
         self._assistant_stream_open = False
 
+    def render_repo_map(self, repo_map: str) -> None:
+        self.console.print()
+        self.console.print(
+            Panel(
+                Syntax(repo_map, "text", theme="monokai", padding=1),
+                title=Text("📦 Repository Map", style="highlight"),
+                subtitle=Text("Project Structure Overview", style="muted"),
+                border_style="highlight",
+                box=box.ROUNDED,
+            )
+        )
+
+    def render_autonomous_status(self, loop_num: int, status: str, analysis: dict) -> None:
+        table = Table(title=f"Autonomous Loop Status - Iteration {loop_num}", box=box.SIMPLE)
+        table.add_column("Property", style="cyan")
+        table.add_column("Value", style="magenta")
+        
+        table.add_row("Status", status)
+        table.add_row("Exit Signal", str(analysis.get("has_exit_signal", False)))
+        table.add_row("Comp. Indicators", str(analysis.get("completion_indicators", 0)))
+        table.add_row("Files Modified", ", ".join(analysis.get("files_modified", [])) or "None")
+        
+        self.console.print(Panel(table, border_style="highlight", padding=(1, 2)))
+
     def stream_assistant_delta(self, content: str) -> None:
         self.console.print(content, end="", markup=False)
 
