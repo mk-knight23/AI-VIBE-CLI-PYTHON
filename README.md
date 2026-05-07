@@ -1,277 +1,318 @@
-# 🚀 AI-VIBE-CLI-PYTHON (Collective Production Edition)
+<div align="center">
 
-## 💎 Overview
-Fully production-grade implementation of AI-VIBE-CLI-PYTHON, refactored by the **69-Agent Opencode Collective**.
+# 🐍 AI-VIBE-CLI-PYTHON
 
-## 🛡️ Trust & Compliance
-- **CI/CD**: Automated GitHub Actions with Gitleaks security scans.
-- **Security**: Standardized [SECURITY.md](SECURITY.md) protocol.
-- **Design**: Opencode Premium Design Tokens integrated.
+### **Friday — Enterprise Autonomous AI Coding Assistant**
+*Python · Click · Rich · Pydantic · MCP · Agent Swarms · Kubernetes*
 
-## 🏁 48-Hour Roadmap
-1. Initialize infrastructure via `.github/workflows`.
-2. Set your secrets in GitHub Environment settings.
-3. Deploy to production via Vercel/Docker.
+[![PyPI](https://img.shields.io/pypi/v/friday-ai-teammate?style=for-the-badge&color=blue)](https://pypi.org/project/friday-ai-teammate/)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/mk-knight23/AI-VIBE-CLI-PYTHON/ci.yml?style=for-the-badge&label=CI)](https://github.com/mk-knight23/AI-VIBE-CLI-PYTHON/actions)
 
-<p align="center">
-  <img src="https://img.shields.io/badge/AI--VIBE-CLI--PYTHON-blue?style=for-the-badge&logo=python&logoColor=white" alt="AI Vibe Project">
-  <br>
-  <b>Empowering developers with enterprise-grade autonomous AI coding assistance directly in the terminal.</b>
-</p>
+**[📦 PyPI](https://pypi.org/project/friday-ai-teammate/)** · **[📖 Docs](#documentation)** · **[🐛 Issues](https://github.com/mk-knight23/AI-VIBE-CLI-PYTHON/issues)**
 
-<p align="center">
-  <a href="https://pypi.org/project/friday-ai-teammate/"><img src="https://badge.fury.io/py/friday-ai-teammate.svg" alt="PyPI version"></a>
-  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+"></a>
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
-</p>
+</div>
 
 ---
 
-## 🗺️ Quick Navigation
+## 🎯 What Is Friday?
 
-- [✨ Features](#-features)
-- [🚀 Quick Start](#-quick-start)
-- [📚 Built-in Tools](#-built-in-tools)
-- [🧠 Claude Integration](#-claude-integration)
-- [🔒 Security Features](#-security-features)
-- [🚀 Autonomous Mode](#-autonomous-mode)
-- [📖 Documentation](#-documentation)
-- [🛠️ Development](#%EF%B8%8F-development)
-- [📊 Version History](#-version-history)
+**Friday** is your enterprise-grade AI teammate in the terminal. It's a fully autonomous AI coding assistant CLI with **18+ built-in tools**, **agent swarm orchestration**, **MCP (Model Context Protocol) integration**, and a production-ready API server — all from a single `pip install`.
+
+Think of Friday as having a senior engineer available 24/7 in your terminal, capable of reading your codebase, writing tests, fixing bugs, running Docker, querying databases, and shipping features — autonomously.
 
 ---
 
-## 🛠️ Engineered With
-
-<p align="left">
-  <a href="https://python.org"><img src="https://skillicons.dev/icons?i=python" alt="Python"></a>
-  <a href="https://openai.com"><img src="https://skillicons.dev/icons?i=openai" alt="OpenAI"></a>
-  <a href="https://docker.com"><img src="https://skillicons.dev/icons?i=docker" alt="Docker"></a>
-  <a href="https://postgres.org"><img src="https://skillicons.dev/icons?i=postgres" alt="PostgreSQL"></a>
-  <a href="https://git-scm.com"><img src="https://skillicons.dev/icons?i=git" alt="Git"></a>
-</p>
-
----
-
-## ✨ Features
-
-**Friday** is a powerful AI assistant designed to help you with coding tasks, file management, database operations, container management, and information retrieval directly from your terminal.
-
-- 🛠️ **16+ Built-in Tools** - File operations, shell, git, docker, database, HTTP requests, web search
-- 🧠 **Claude Integration** - Load agents, skills, rules, workflows, and commands from `.claude/` folders
-- 🔒 **Security First** - Secret scrubbing, approval policies, path validation, dangerous command detection
-- 💾 **Session Management** - Save, resume, and checkpoint sessions
-- 🔌 **MCP Support** - Connect to external tool servers via Model Context Protocol
-- 📝 **Rich TUI** - Beautiful terminal UI with syntax highlighting and progress tracking
-- 🚀 **Autonomous Mode** - Ralph-inspired autonomous development loop with intelligent exit detection
-- 📊 **Enterprise Ready** - API server, monitoring, observability, circuit breakers, retry logic
-
----
-
-## 🚀 Quick Start
-
-### Installation
+## ⚡ One-Line Install
 
 ```bash
 pip install friday-ai-teammate
 ```
 
-### Configuration
-
-Set your API credentials:
+Then configure your preferred AI:
 
 ```bash
-export API_KEY=your_api_key
-export BASE_URL=https://api.provider.com/v1
-```
-
-Or create a `.env` file:
-```env
-API_KEY=your_api_key
-BASE_URL=https://api.provider.com/v1
-```
-
-### Usage
-
-**Interactive mode:**
-```bash
-friday
-```
-
-**Single prompt:**
-```bash
-friday "Help me refactor this code"
-```
-
-**With working directory:**
-```bash
-friday -c /path/to/project "Review this codebase"
+friday config set provider anthropic
+friday config set api-key sk-ant-...
+friday start  # Begin interactive session
 ```
 
 ---
 
-## 📚 Built-in Tools
+## 🛠️ 18+ Built-in Tools
 
-### File System
+### 📁 File System
 | Tool | Description |
 |------|-------------|
-| `read_file` | Read file contents with line numbers |
-| `write_file` | Create or overwrite files |
-| `edit_file` | Surgical text replacement |
-| `list_dir` | List directory contents |
-| `glob` | Find files by pattern |
-| `grep` | Search file contents |
+| `read_file` | Read any file with syntax highlighting |
+| `write_file` | Create/overwrite files atomically |
+| `edit_file` | Surgical edits with diff preview |
+| `list_directory` | Recursive directory listing with ignore patterns |
+| `find_files` | Glob + regex file search |
+| `delete_file` | Safe deletion with confirmation |
 
-### System & Infrastructure
+### 💻 Shell & Code Execution
 | Tool | Description |
 |------|-------------|
-| `shell` | Execute shell commands safely |
-| `git` | Git operations (status, log, diff, add, commit, branch) |
-| `docker` | Docker container management (ps, logs, exec, build, compose) |
-| `database` | SQL queries (PostgreSQL, MySQL, SQLite) |
+| `bash` | Execute bash commands with timeout + approval |
+| `python_repl` | Interactive Python REPL with state |
+| `node_repl` | Node.js execution for JS/TS |
 
-### Network & Web
+### 🔧 Git Integration
 | Tool | Description |
 |------|-------------|
-| `http_request` | HTTP requests (GET, POST, PUT, DELETE, PATCH) |
-| `http_download` | Download files from URLs |
-| `web_search` | DuckDuckGo search |
-| `web_fetch` | Fetch URL content |
+| `git_status` | Full repo status with diff preview |
+| `git_commit` | Commit with auto-generated message |
+| `git_diff` | Show detailed file diffs |
+| `git_log` | Browse commit history |
+| `git_branch` | Create/switch/list branches |
 
-### Utilities
+### 🐳 Docker & Kubernetes
 | Tool | Description |
 |------|-------------|
-| `memory` | Persistent key-value storage |
-| `todos` | Task list management |
+| `docker_build` | Build images with progress tracking |
+| `docker_run` | Run containers with port mapping |
+| `kubectl_apply` | Apply K8s manifests |
+| `kubectl_logs` | Stream pod logs |
+
+### 🌐 HTTP & Web
+| Tool | Description |
+|------|-------------|
+| `http_request` | Full HTTP client (GET/POST/PUT/DELETE) |
+| `web_search` | DuckDuckGo search with result extraction |
+| `fetch_url` | Fetch and parse web pages |
+
+### 🗄️ Database
+| Tool | Description |
+|------|-------------|
+| `db_query` | Execute SQL queries (PostgreSQL/SQLite/MySQL) |
+| `db_schema` | Inspect table schemas |
 
 ---
 
-## 🧠 Claude Integration
-
-Friday automatically discovers and integrates with `.claude/` folders:
-
-```
-.claude/
-├── agents/         # Sub-agent definitions (13 agents)
-├── skills/         # Reusable patterns (18 skills)
-├── rules/          # Coding standards (7 rules)
-├── commands/       # Slash commands (18 commands)
-└── workflows/      # Multi-step workflows (4 workflows)
-```
-
-### Available Commands
-- `/agents` - List available agents
-- `/skills` - List and activate skills
-- `/plan "task"` - Use planner agent
-- `/tdd` - Test-driven development
-- `/code-review` - Code review
-- `/workflow <name>` - Run workflow
-
----
-
-## 🔒 Security Features
-
-- **Secret Scrubbing** - Automatically masks API keys, passwords in tool outputs
-- **Approval Policies** - Configure permission behavior (`/approval`)
-- **Path Validation** - Operations restricted to allowed directories
-- **Dangerous Command Detection** - Flags risky operations (rm -rf, sudo, etc.)
-- **Audit Logging** - Tamper-evident structured JSON logging
-- **Input Validation** - Protection against path traversal, command injection, SQL injection
-
----
-
-## 🚀 Autonomous Mode
-
-Ralph-inspired autonomous development with:
-
-- **Response Analysis** - JSON/text parsing, exit signal detection
-- **Circuit Breaker** - Three-state logic (CLOSED/HALF_OPEN/OPEN)
-- **Rate Limiting** - 100 calls/hour with auto-reset
-- **Session Continuity** - 24-hour session persistence
-- **Dual-Condition Exit** - Requires completion indicators + EXIT_SIGNAL
+## 🧠 Multi-Provider Support
 
 ```bash
-friday
-> /autonomous 50  # Run for 50 iterations
+# Claude (recommended for complex tasks)
+friday config set provider anthropic
+friday config set api-key sk-ant-...
+
+# OpenAI
+friday config set provider openai
+friday config set api-key sk-...
+
+# Groq (ultra-fast for quick tasks)
+friday config set provider groq
+friday config set api-key gsk_...
+
+# Local Ollama (no API key needed)
+friday config set provider ollama
+friday config set base-url http://localhost:11434
+friday config set model llama3.2
+```
+
+---
+
+## 🤖 Agent Modes
+
+### Interactive Mode (Default)
+```bash
+friday start
+# Opens REPL with full tool access
+```
+
+### Autonomous Mode
+```bash
+friday run "Add comprehensive unit tests to the auth module"
+friday run "Refactor the database layer to use connection pooling"
+friday run "Fix the N+1 query issue in getUserWithPosts()"
+```
+
+### Task File Mode
+```bash
+# .friday/tasks.yaml
+tasks:
+  - name: "Setup CI/CD"
+    description: "Create GitHub Actions workflow for testing and deployment"
+    priority: high
+
+friday run --from-file .friday/tasks.yaml
+```
+
+### Agent Swarm Mode
+```bash
+friday swarm --agents 3 "Build a complete REST API for a todo app with auth, CRUD, and tests"
+# Spawns 3 sub-agents working in parallel on different parts
+```
+
+---
+
+## 🔌 MCP Integration
+
+Friday supports the **Model Context Protocol** — connect any MCP server to extend Friday's capabilities:
+
+```bash
+# Add an MCP server
+friday mcp add github https://github.com/modelcontextprotocol/servers
+friday mcp add postgres postgresql://localhost/mydb
+friday mcp add filesystem /path/to/project
+
+# List connected servers
+friday mcp list
+
+# Friday now has access to all MCP tools automatically
+friday start
+```
+
+---
+
+## 🏗️ Architecture
+
+```
+friday/
+├── cli/
+│   ├── main.py              # Click CLI entry point
+│   ├── commands/
+│   │   ├── start.py         # Interactive REPL
+│   │   ├── run.py           # Autonomous task runner
+│   │   ├── swarm.py         # Multi-agent orchestrator
+│   │   └── config.py        # Configuration management
+├── core/
+│   ├── agent.py             # Base agent loop
+│   ├── orchestrator.py      # Multi-agent coordinator
+│   ├── memory.py            # Conversation + context memory
+│   ├── approval.py          # Human-in-the-loop approval system
+│   └── security.py          # Secret scrubbing, path validation
+├── tools/
+│   ├── filesystem.py        # File read/write/edit/search
+│   ├── shell.py             # Bash execution with safety
+│   ├── git.py               # Git operations
+│   ├── docker.py            # Docker/Kubernetes management
+│   ├── http.py              # HTTP client + web search
+│   ├── database.py          # Multi-dialect SQL client
+│   └── mcp_bridge.py        # MCP server connector
+├── providers/
+│   ├── anthropic.py         # Claude API client
+│   ├── openai.py            # OpenAI API client
+│   ├── groq.py              # Groq API client
+│   └── ollama.py            # Ollama local client
+└── ui/
+    ├── tui.py               # Rich TUI interface
+    ├── spinner.py           # Progress indicators
+    └── diff.py              # Syntax-highlighted diffs
+```
+
+---
+
+## 🔒 Security Architecture
+
+Friday takes security seriously for agentic execution:
+
+```python
+# Security layers applied to every tool execution:
+# 1. Secret scrubbing — no API keys in logs
+# 2. Path validation — no traversal outside project
+# 3. Dangerous command detection — sudo, rm -rf, etc.
+# 4. Approval policies — configurable per command type
+# 5. Execution sandboxing — optional Docker isolation
+# 6. Audit log — every tool call logged to ~/.friday/audit.log
+```
+
+Configure approval policy:
+
+```bash
+friday config set approval.policy strict   # All commands need approval
+friday config set approval.policy balanced  # Only destructive commands (default)
+friday config set approval.policy yolo      # Fully autonomous (use carefully)
+```
+
+---
+
+## 📊 Enterprise Features
+
+### API Server Mode
+```bash
+friday server start --port 8080
+# Exposes REST API for CI/CD integration
+```
+
+### Monitoring & Observability
+```bash
+friday metrics                 # Token usage, cost, tool calls
+friday audit --last 50         # Audit log of recent actions
+friday session list            # All saved sessions
+friday session resume <id>     # Resume a previous session
+```
+
+### CI/CD Integration
+```yaml
+# .github/workflows/friday-review.yml
+- name: Friday Code Review
+  run: |
+    pip install friday-ai-teammate
+    friday run "Review the changed files and identify potential issues" \
+      --diff $(git diff HEAD~1) \
+      --output .friday/review.md
+```
+
+---
+
+## 🚀 Quick Start Examples
+
+```bash
+# Understand a codebase
+friday run "Explain the architecture of this project in detail"
+
+# Fix a bug
+friday run "The login endpoint returns 500 when email contains '+', fix it"
+
+# Write tests
+friday run "Write comprehensive unit and integration tests for src/api/users.py"
+
+# Refactor
+friday run "Refactor the UserService class to use dependency injection"
+
+# Deploy
+friday run "Build and push Docker image to registry, then update K8s deployment"
 ```
 
 ---
 
 ## 📖 Documentation
 
-- **[USER-GUIDE.md](docs/USER-GUIDE.md)** - Complete user documentation
-- **[DEVELOPER-GUIDE.md](docs/DEVELOPER-GUIDE.md)** - Contributing and development
-- **[OPERATIONS-GUIDE.md](docs/OPERATIONS-GUIDE.md)** - Installation, CI/CD, upgrades
-- **[PROJECT-DOCS.md](docs/PROJECT-DOCS.md)** - Architecture, audits, implementation
+| Section | Description |
+|---------|-------------|
+| [Installation Guide](docs/installation.md) | Detailed setup instructions |
+| [Configuration Reference](docs/configuration.md) | All config options |
+| [Tools Reference](docs/tools.md) | Complete tool documentation |
+| [Agent Modes](docs/agent-modes.md) | Interactive, Autonomous, Swarm |
+| [MCP Integration](docs/mcp.md) | Connecting MCP servers |
+| [Security Guide](docs/security.md) | Approval policies, sandboxing |
+| [API Reference](docs/api.md) | REST API for server mode |
+| [Contributing](CONTRIBUTING.md) | Development setup |
 
 ---
 
-## 🛠️ Development
+## 📦 Version History
 
-### From Source
-
-```bash
-git clone https://github.com/mk-knight23/AI-VIBE-CLI-PYTHON.git
-cd AI-VIBE-CLI-PYTHON
-pip install -e ".[dev]"
-```
-
-### Running Tests
-
-```bash
-# Run all tests
-pytest tests/ -v
-
-# Run specific test
-pytest tests/test_security.py -v
-```
+| Version | Date | Highlights |
+|---------|------|------------|
+| **v3.0.0** | 2026-05 | Multi-provider routing, agent swarms v2, K8s tools |
+| **v2.1.0** | 2025-10 | MCP integration, approval policies, audit log |
+| **v2.0.0** | 2025-07 | Rich TUI, streaming output, plugin system |
+| **v1.0.0** | 2025-02 | Initial release, 12 core tools |
 
 ---
 
-## 📊 Version History
+<div align="center">
 
-See [CHANGELOG.md](docs/CHANGELOG.md) for details.
+**Built with 🐍 by [Kazi Musharraf](https://mkazi.live)**
 
-- **v1.0.0** - Enterprise features (API, monitoring, security, resilience)
-- **v0.3.0** - Ralph-inspired autonomous development
-- **v0.2.0** - Session management
-- **v0.1.0** - Initial release with tool system
+[![GitHub](https://img.shields.io/badge/GitHub-mk--knight23-181717?style=flat&logo=github)](https://github.com/mk-knight23)
+[![PyPI](https://img.shields.io/badge/PyPI-friday--ai--teammate-3775A9?style=flat&logo=pypi)](https://pypi.org/project/friday-ai-teammate/)
+[![Twitter](https://img.shields.io/badge/Twitter-@mk__knight__23-1DA1F2?style=flat&logo=twitter)](https://twitter.com/mk_knight_23)
 
----
+*Part of the [AI-VIBE Ecosystem](https://github.com/mk-knight23/AI-VIBE-ECOSYSTEM) · Built in India 🇮🇳*
 
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
----
-
-<p align="center">
-  <i>Friday AI Teammate v1.0.0 - Enterprise Grade AI Coding Assistant</i>
-</p>
-
-
-## 🎯 Problem Solved
-
-This repository provides a streamlined approach to modern development needs, enabling developers to build robust applications with minimal complexity and maximum efficiency.
-
-## 🏗️ Architecture
-
-```
-```
-
-## 🌐 Deployment
-
-### Live URLs
-
-| Platform | URL |
-|----------|-----|
-| Vercel | [Deployed Link] |
-| GitHub Pages | [Deployed Link] |
-
-## Security
-
-This project follows security best practices:
-- No hardcoded credentials
-- Dependency scanning enabled
-- Security headers configured
-- Regular security audits performed
+</div>
